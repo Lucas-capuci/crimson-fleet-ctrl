@@ -1,0 +1,350 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Search, Wrench, Clock, CheckCircle, Calendar, Car } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { differenceInHours, differenceInDays } from "date-fns";
+
+type MaintenanceStatus = "pendente" | "em_andamento" | "concluida";
+
+interface WorkshopEntry {
+  id: string;
+  vehicle_id: string;
+  entry_date: string;
+  exit_date: string | null;
+  reason: string;
+  status: MaintenanceStatus;
+  notes: string | null;
+  vehicles?: {
+    plate: string;
+    model: string;
+    teams?: { name: string } | null;
+  };
+}
+
+interface Vehicle {
+  id: string;
+  plate: string;
+  model: string;
+}
+
+const statusConfig = {
+  pendente: { label: "Pendente", icon: Clock, className: "status-maintenance" },
+  em_andamento: { label: "Em Andamento", icon: Wrench, className: "status-in-use" },
+  concluida: { label: "Concluída", icon: CheckCircle, className: "status-available" },
+};
+
+const Workshop = () => {
+  const { isAdmin, userTeamIds } = useAuth();
+  const queryClient = useQueryClient();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    vehicle_id: "",
+    reason: "",
+    notes: "",
+  });
+
+  const { data: entries = [], isLoading } = useQuery({
+    queryKey: ["workshop_entries"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("workshop_entries")
+        .select(`
+          *,
+          vehicles (
+            plate,
+            model,
+            teams ( name )
+          )
+        `)
+        .order("entry_date", { ascending: false });
+      if (error) throw error;
+      return data as WorkshopEntry[];
+    },
+  });
+
+  const { data: vehicles = [] } = useQuery({
+    queryKey: ["vehicles_for_workshop"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vehicles")
+        .select("id, plate, model")
+        .order("plate");
+      if (error) throw error;
+      return data as Vehicle[];
+    },
+  });
+
+  const createEntry = useMutation({
+    mutationFn: async (data: { vehicle_id: string; reason: string; notes: string }) => {
+      const { error } = await supabase.from("workshop_entries").insert({
+        vehicle_id: data.vehicle_id,
+        reason: data.reason,
+        notes: data.notes || null,
+        status: "em_andamento" as MaintenanceStatus,
+      });
+      if (error) throw error;
+      
+      // Update vehicle status to oficina
+      await supabase.from("vehicles").update({ status: "oficina" }).eq("id", data.vehicle_id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workshop_entries"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      toast({ title: "Entrada na oficina registrada!" });
+      resetForm();
+    },
+    onError: (error) => {
+      toast({ title: "Erro ao registrar entrada", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const markAsCompleted = useMutation({
+    mutationFn: async (entry: WorkshopEntry) => {
+      const { error } = await supabase
+        .from("workshop_entries")
+        .update({ status: "concluida" as MaintenanceStatus, exit_date: new Date().toISOString() })
+        .eq("id", entry.id);
+      if (error) throw error;
+      
+      // Update vehicle status back to ativo
+      await supabase.from("vehicles").update({ status: "ativo" }).eq("id", entry.vehicle_id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workshop_entries"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      toast({ title: "Saída da oficina registrada!" });
+    },
+    onError: (error) => {
+      toast({ title: "Erro ao registrar saída", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const activeEntries = entries.filter((e) => e.status !== "concluida");
+  const completedEntries = entries.filter((e) => e.status === "concluida");
+
+  const calculateDowntime = (entryDate: string, exitDate: string | null) => {
+    const start = new Date(entryDate);
+    const end = exitDate ? new Date(exitDate) : new Date();
+    const hours = differenceInHours(end, start);
+    const days = differenceInDays(end, start);
+    
+    if (days >= 1) {
+      return `${days} dia${days > 1 ? "s" : ""} e ${hours % 24}h`;
+    }
+    return `${hours}h`;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createEntry.mutate(formData);
+  };
+
+  const resetForm = () => {
+    setFormData({ vehicle_id: "", reason: "", notes: "" });
+    setIsDialogOpen(false);
+  };
+
+  const EntryCard = ({ entry }: { entry: WorkshopEntry }) => {
+    const status = statusConfig[entry.status];
+    const StatusIcon = status.icon;
+    const downtime = calculateDowntime(entry.entry_date, entry.exit_date);
+
+    return (
+      <div className="bg-card rounded-xl border border-border p-5 card-hover">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Wrench className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-foreground">
+                {entry.vehicles?.plate} - {entry.vehicles?.model}
+              </h4>
+              <p className="text-sm text-muted-foreground">
+                {entry.vehicles?.teams?.name || "Sem equipe"}
+              </p>
+            </div>
+          </div>
+          <span className={cn("flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium", status.className)}>
+            <StatusIcon className="h-3.5 w-3.5" />
+            {status.label}
+          </span>
+        </div>
+        
+        <p className="text-sm text-foreground mb-4">{entry.reason}</p>
+        {entry.notes && (
+          <p className="text-sm text-muted-foreground mb-4">{entry.notes}</p>
+        )}
+        
+        <div className="flex items-center justify-between pt-4 border-t border-border">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="h-4 w-4" />
+              Entrada: {new Date(entry.entry_date).toLocaleDateString("pt-BR")}
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <Clock className="h-4 w-4 text-primary" />
+              <span className="font-medium text-primary">Tempo parado: {downtime}</span>
+            </div>
+          </div>
+          {entry.status !== "concluida" && (
+            <Button size="sm" onClick={() => markAsCompleted.mutate(entry)}>
+              Registrar Saída
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <MainLayout>
+      <div className="mb-8 animate-fade-in">
+        <h1 className="text-3xl font-bold text-foreground mb-2">Oficina</h1>
+        <p className="text-muted-foreground">Controle de entrada e saída de veículos</p>
+      </div>
+
+      {/* Actions */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por veículo..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              Registrar Entrada
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Registrar Entrada na Oficina</DialogTitle>
+              <DialogDescription>Registre a entrada de um veículo na oficina</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="vehicle">Veículo</Label>
+                <Select
+                  value={formData.vehicle_id}
+                  onValueChange={(value) => setFormData({ ...formData, vehicle_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o veículo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {vehicles.map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.plate} - {v.model}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reason">Motivo da Entrada</Label>
+                <Input
+                  id="reason"
+                  value={formData.reason}
+                  onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                  placeholder="Descreva o motivo..."
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="notes">Observações (opcional)</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="Observações adicionais..."
+                  rows={3}
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <Button type="button" variant="outline" onClick={resetForm}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={createEntry.isPending}>
+                  Registrar
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Tabs */}
+      <Tabs defaultValue="active" className="animate-fade-in">
+        <TabsList className="mb-6">
+          <TabsTrigger value="active" className="gap-2">
+            <Wrench className="h-4 w-4" />
+            Na Oficina ({activeEntries.length})
+          </TabsTrigger>
+          <TabsTrigger value="completed" className="gap-2">
+            <CheckCircle className="h-4 w-4" />
+            Concluídas ({completedEntries.length})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="active">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {activeEntries.map((entry) => (
+              <EntryCard key={entry.id} entry={entry} />
+            ))}
+          </div>
+          {activeEntries.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              Nenhum veículo na oficina
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="completed">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {completedEntries.map((entry) => (
+              <EntryCard key={entry.id} entry={entry} />
+            ))}
+          </div>
+          {completedEntries.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              Nenhuma entrada concluída
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </MainLayout>
+  );
+};
+
+export default Workshop;
