@@ -3,31 +3,43 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
+import Auth from "./pages/Auth";
 import Vehicles from "./pages/Vehicles";
 import Maintenance from "./pages/Maintenance";
 import Drivers from "./pages/Drivers";
 import Incidents from "./pages/Incidents";
+import Teams from "./pages/Teams";
+import Workshop from "./pages/Workshop";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/veiculos" element={<Vehicles />} />
-          <Route path="/manutencao" element={<Maintenance />} />
-          <Route path="/motoristas" element={<Drivers />} />
-          <Route path="/ocorrencias" element={<Incidents />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+            <Route path="/veiculos" element={<ProtectedRoute><Vehicles /></ProtectedRoute>} />
+            <Route path="/manutencao" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
+            <Route path="/motoristas" element={<ProtectedRoute><Drivers /></ProtectedRoute>} />
+            <Route path="/ocorrencias" element={<ProtectedRoute><Incidents /></ProtectedRoute>} />
+            <Route path="/equipes" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
+            <Route path="/oficina" element={<ProtectedRoute><Workshop /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

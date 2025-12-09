@@ -8,20 +8,33 @@ import {
   Menu,
   X,
   Truck,
+  Users2,
+  Building,
+  Shield,
+  LogOut,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Equipes", url: "/equipes", icon: Users2 },
   { title: "Veículos", url: "/veiculos", icon: Car },
   { title: "Manutenção", url: "/manutencao", icon: Wrench },
+  { title: "Oficina", url: "/oficina", icon: Building },
   { title: "Motoristas", url: "/motoristas", icon: Users },
   { title: "Ocorrências", url: "/ocorrencias", icon: AlertTriangle },
 ];
 
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
+  const { user, isAdmin, signOut } = useAuth();
+
+  const allNavItems = isAdmin 
+    ? [...navItems, { title: "Administração", url: "/admin", icon: Shield }]
+    : navItems;
 
   return (
     <>
@@ -62,7 +75,7 @@ export function Sidebar() {
 
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-2">
-            {navItems.map((item) => (
+            {allNavItems.map((item) => (
               <NavLink
                 key={item.url}
                 to={item.url}
@@ -77,10 +90,20 @@ export function Sidebar() {
           </nav>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-sidebar-border">
-            <p className="text-xs text-sidebar-foreground/50 text-center">
-              © 2024 FleetControl
-            </p>
+          <div className="px-4 py-4 border-t border-sidebar-border space-y-3">
+            {user && (
+              <div className="text-xs text-sidebar-foreground/70 truncate px-2">
+                {user.email}
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-2 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              onClick={() => signOut()}
+            >
+              <LogOut className="h-4 w-4" />
+              Sair
+            </Button>
           </div>
         </div>
       </aside>
