@@ -430,7 +430,12 @@ export type Database = {
       incident_type: "multa" | "acidente" | "incidente" | "observacao"
       maintenance_status: "pendente" | "em_andamento" | "concluida"
       team_type: "linha_viva" | "linha_morta" | "poda" | "linha_morta_obras"
-      vehicle_status: "ativo" | "manutencao" | "reserva" | "oficina"
+      vehicle_status:
+        | "ativo"
+        | "manutencao"
+        | "reserva"
+        | "oficina"
+        | "mobilizar"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -563,7 +568,13 @@ export const Constants = {
       incident_type: ["multa", "acidente", "incidente", "observacao"],
       maintenance_status: ["pendente", "em_andamento", "concluida"],
       team_type: ["linha_viva", "linha_morta", "poda", "linha_morta_obras"],
-      vehicle_status: ["ativo", "manutencao", "reserva", "oficina"],
+      vehicle_status: [
+        "ativo",
+        "manutencao",
+        "reserva",
+        "oficina",
+        "mobilizar",
+      ],
     },
   },
 } as const
