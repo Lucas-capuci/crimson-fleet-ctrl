@@ -27,7 +27,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, Edit, Trash2, Users } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Users, Truck } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +40,7 @@ interface Team {
   id: string;
   name: string;
   type: TeamType;
+  has_basket: boolean;
   created_at: string;
 }
 
@@ -54,11 +56,13 @@ const Teams = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
+  const [filterBasket, setFilterBasket] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     type: "linha_viva" as TeamType,
+    has_basket: false,
   });
 
   const { data: teams = [], isLoading } = useQuery({
@@ -74,7 +78,7 @@ const Teams = () => {
   });
 
   const createTeam = useMutation({
-    mutationFn: async (data: { name: string; type: TeamType }) => {
+    mutationFn: async (data: { name: string; type: TeamType; has_basket: boolean }) => {
       const { error } = await supabase.from("teams").insert(data);
       if (error) throw error;
     },
@@ -89,7 +93,7 @@ const Teams = () => {
   });
 
   const updateTeam = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { name: string; type: TeamType } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { name: string; type: TeamType; has_basket: boolean } }) => {
       const { error } = await supabase.from("teams").update(data).eq("id", id);
       if (error) throw error;
     },
@@ -120,7 +124,10 @@ const Teams = () => {
   const filteredTeams = teams.filter((t) => {
     const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = filterType === "all" || t.type === filterType;
-    return matchesSearch && matchesType;
+    const matchesBasket = filterBasket === "all" || 
+      (filterBasket === "with" && t.has_basket) || 
+      (filterBasket === "without" && !t.has_basket);
+    return matchesSearch && matchesType && matchesBasket;
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -134,7 +141,7 @@ const Teams = () => {
 
   const handleEdit = (team: Team) => {
     setEditingTeam(team);
-    setFormData({ name: team.name, type: team.type });
+    setFormData({ name: team.name, type: team.type, has_basket: team.has_basket });
     setIsDialogOpen(true);
   };
 
@@ -145,7 +152,7 @@ const Teams = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: "", type: "linha_viva" });
+    setFormData({ name: "", type: "linha_viva", has_basket: false });
     setEditingTeam(null);
     setIsDialogOpen(false);
   };
@@ -169,7 +176,7 @@ const Teams = () => {
           />
         </div>
         <Select value={filterType} onValueChange={setFilterType}>
-          <SelectTrigger className="w-full sm:w-48">
+          <SelectTrigger className="w-full sm:w-40">
             <SelectValue placeholder="Filtrar por tipo" />
           </SelectTrigger>
           <SelectContent>
@@ -178,6 +185,16 @@ const Teams = () => {
             <SelectItem value="linha_morta">Linha Morta</SelectItem>
             <SelectItem value="poda">Poda</SelectItem>
             <SelectItem value="linha_morta_obras">Linha Morta Obras</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterBasket} onValueChange={setFilterBasket}>
+          <SelectTrigger className="w-full sm:w-40">
+            <SelectValue placeholder="Cesto aéreo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="with">Com Cesto</SelectItem>
+            <SelectItem value="without">Sem Cesto</SelectItem>
           </SelectContent>
         </Select>
         {isAdmin && (
@@ -223,6 +240,17 @@ const Teams = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="has_basket"
+                    checked={formData.has_basket}
+                    onCheckedChange={(checked) => setFormData({ ...formData, has_basket: checked === true })}
+                  />
+                  <Label htmlFor="has_basket" className="cursor-pointer flex items-center gap-2">
+                    <Truck className="h-4 w-4" />
+                    Possui Cesto Aéreo
+                  </Label>
+                </div>
                 <div className="flex justify-end gap-3 pt-4">
                   <Button type="button" variant="outline" onClick={resetForm}>
                     Cancelar
@@ -244,6 +272,7 @@ const Teams = () => {
             <TableRow className="bg-muted/50">
               <TableHead>Nome</TableHead>
               <TableHead>Tipo</TableHead>
+              <TableHead>Cesto Aéreo</TableHead>
               <TableHead>Criado em</TableHead>
               {isAdmin && <TableHead className="text-right">Ações</TableHead>}
             </TableRow>
@@ -261,6 +290,16 @@ const Teams = () => {
                   <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
                     {teamTypeLabels[team.type]}
                   </span>
+                </TableCell>
+                <TableCell>
+                  {team.has_basket ? (
+                    <span className="flex items-center gap-1 text-green-600">
+                      <Truck className="h-4 w-4" />
+                      Sim
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">Não</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   {new Date(team.created_at).toLocaleDateString("pt-BR")}
