@@ -411,6 +411,7 @@ export type Database = {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
       }
+      get_email_by_username: { Args: { _username: string }; Returns: string }
       get_user_team_ids: { Args: { _user_id: string }; Returns: string[] }
       has_role: {
         Args: {

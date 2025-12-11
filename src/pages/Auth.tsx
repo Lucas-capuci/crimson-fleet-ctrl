@@ -46,14 +46,11 @@ const Auth = () => {
 
     setIsLoading(true);
     
-    // First, find the email associated with the username
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("email")
-      .eq("username", loginForm.username)
-      .maybeSingle();
+    // First, find the email associated with the username using RPC
+    const { data: email, error: emailError } = await supabase
+      .rpc("get_email_by_username", { _username: loginForm.username });
     
-    if (profileError || !profile) {
+    if (emailError || !email) {
       setIsLoading(false);
       toast({ title: "Usuário ou senha incorretos", variant: "destructive" });
       return;
@@ -61,7 +58,7 @@ const Auth = () => {
 
     // Then sign in with the email
     const { error } = await supabase.auth.signInWithPassword({
-      email: profile.email,
+      email: email,
       password: loginForm.password,
     });
     setIsLoading(false);
