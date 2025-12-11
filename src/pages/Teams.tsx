@@ -41,7 +41,20 @@ interface Team {
   name: string;
   type: TeamType;
   has_basket: boolean;
+  cost_center: string | null;
   created_at: string;
+}
+
+interface Profile {
+  id: string;
+  name: string;
+  username: string | null;
+}
+
+interface UserRole {
+  id: string;
+  user_id: string;
+  role: string;
 }
 
 const teamTypeLabels: Record<TeamType, string> = {
@@ -63,6 +76,8 @@ const Teams = () => {
     name: "",
     type: "linha_viva" as TeamType,
     has_basket: false,
+    cost_center: "",
+    supervisor_id: "",
   });
 
   const { data: teams = [], isLoading } = useQuery({
@@ -77,13 +92,60 @@ const Teams = () => {
     },
   });
 
-  const createTeam = useMutation({
-    mutationFn: async (data: { name: string; type: TeamType; has_basket: boolean }) => {
-      const { error } = await supabase.from("teams").insert(data);
+  // Fetch supervisors for dropdown
+  const { data: supervisors = [] } = useQuery({
+    queryKey: ["supervisors"],
+    queryFn: async () => {
+      const { data: roles, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "supervisor");
+      if (rolesError) throw rolesError;
+
+      const supervisorIds = roles.map((r) => r.user_id);
+      if (supervisorIds.length === 0) return [];
+
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, name, username")
+        .in("id", supervisorIds);
+      if (profilesError) throw profilesError;
+
+      return profiles as Profile[];
+    },
+  });
+
+  // Fetch supervisor_teams to show current assignment
+  const { data: supervisorTeams = [] } = useQuery({
+    queryKey: ["supervisor_teams"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("supervisor_teams").select("*");
       if (error) throw error;
+      return data;
+    },
+  });
+
+  const createTeam = useMutation({
+    mutationFn: async (data: { name: string; type: TeamType; has_basket: boolean; cost_center: string; supervisor_id: string }) => {
+      const { cost_center, supervisor_id, ...teamData } = data;
+      const { data: newTeam, error } = await supabase
+        .from("teams")
+        .insert({ ...teamData, cost_center: cost_center || null })
+        .select()
+        .single();
+      if (error) throw error;
+
+      // If supervisor is selected, create the assignment
+      if (supervisor_id && newTeam) {
+        const { error: stError } = await supabase
+          .from("supervisor_teams")
+          .insert({ supervisor_id, team_id: newTeam.id });
+        if (stError) console.error("Error assigning supervisor:", stError);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["teams"] });
+      queryClient.invalidateQueries({ queryKey: ["supervisor_teams"] });
       toast({ title: "Equipe criada com sucesso!" });
       resetForm();
     },
@@ -93,12 +155,29 @@ const Teams = () => {
   });
 
   const updateTeam = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { name: string; type: TeamType; has_basket: boolean } }) => {
-      const { error } = await supabase.from("teams").update(data).eq("id", id);
+    mutationFn: async ({ id, data }: { id: string; data: { name: string; type: TeamType; has_basket: boolean; cost_center: string; supervisor_id: string } }) => {
+      const { cost_center, supervisor_id, ...teamData } = data;
+      const { error } = await supabase
+        .from("teams")
+        .update({ ...teamData, cost_center: cost_center || null })
+        .eq("id", id);
       if (error) throw error;
+
+      // Update supervisor assignment
+      // First remove existing assignment for this team
+      await supabase.from("supervisor_teams").delete().eq("team_id", id);
+      
+      // Then add new assignment if supervisor is selected
+      if (supervisor_id) {
+        const { error: stError } = await supabase
+          .from("supervisor_teams")
+          .insert({ supervisor_id, team_id: id });
+        if (stError) console.error("Error assigning supervisor:", stError);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["teams"] });
+      queryClient.invalidateQueries({ queryKey: ["supervisor_teams"] });
       toast({ title: "Equipe atualizada com sucesso!" });
       resetForm();
     },
@@ -141,7 +220,15 @@ const Teams = () => {
 
   const handleEdit = (team: Team) => {
     setEditingTeam(team);
-    setFormData({ name: team.name, type: team.type, has_basket: team.has_basket });
+    // Find current supervisor for this team
+    const assignment = supervisorTeams.find((st) => st.team_id === team.id);
+    setFormData({ 
+      name: team.name, 
+      type: team.type, 
+      has_basket: team.has_basket,
+      cost_center: team.cost_center || "",
+      supervisor_id: assignment?.supervisor_id || "",
+    });
     setIsDialogOpen(true);
   };
 
@@ -152,9 +239,17 @@ const Teams = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: "", type: "linha_viva", has_basket: false });
+    setFormData({ name: "", type: "linha_viva", has_basket: false, cost_center: "", supervisor_id: "" });
     setEditingTeam(null);
     setIsDialogOpen(false);
+  };
+
+  // Helper to get supervisor name for a team
+  const getSupervisorName = (teamId: string) => {
+    const assignment = supervisorTeams.find((st) => st.team_id === teamId);
+    if (!assignment) return null;
+    const supervisor = supervisors.find((s) => s.id === assignment.supervisor_id);
+    return supervisor?.name || supervisor?.username || null;
   };
 
   return (
@@ -240,6 +335,38 @@ const Teams = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cost_center">Centro de Custo (6 dígitos)</Label>
+                  <Input
+                    id="cost_center"
+                    value={formData.cost_center}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                      setFormData({ ...formData, cost_center: value });
+                    }}
+                    placeholder="000000"
+                    maxLength={6}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="supervisor">Supervisor Responsável</Label>
+                  <Select
+                    value={formData.supervisor_id}
+                    onValueChange={(value) => setFormData({ ...formData, supervisor_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um supervisor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Nenhum</SelectItem>
+                      {supervisors.map((sup) => (
+                        <SelectItem key={sup.id} value={sup.id}>
+                          {sup.name} {sup.username ? `(${sup.username})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="has_basket"
@@ -272,8 +399,9 @@ const Teams = () => {
             <TableRow className="bg-muted/50">
               <TableHead>Nome</TableHead>
               <TableHead>Tipo</TableHead>
+              <TableHead>Centro de Custo</TableHead>
+              <TableHead>Supervisor</TableHead>
               <TableHead>Cesto Aéreo</TableHead>
-              <TableHead>Criado em</TableHead>
               {isAdmin && <TableHead className="text-right">Ações</TableHead>}
             </TableRow>
           </TableHeader>
@@ -292,6 +420,12 @@ const Teams = () => {
                   </span>
                 </TableCell>
                 <TableCell>
+                  {team.cost_center || <span className="text-muted-foreground">-</span>}
+                </TableCell>
+                <TableCell>
+                  {getSupervisorName(team.id) || <span className="text-muted-foreground">-</span>}
+                </TableCell>
+                <TableCell>
                   {team.has_basket ? (
                     <span className="flex items-center gap-1 text-green-600">
                       <Truck className="h-4 w-4" />
@@ -300,9 +434,6 @@ const Teams = () => {
                   ) : (
                     <span className="text-muted-foreground">Não</span>
                   )}
-                </TableCell>
-                <TableCell>
-                  {new Date(team.created_at).toLocaleDateString("pt-BR")}
                 </TableCell>
                 {isAdmin && (
                   <TableCell className="text-right">
