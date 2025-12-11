@@ -29,9 +29,10 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, User, Users, Shield, Link2, Unlink } from "lucide-react";
+import { Plus, User, Users, Shield, Link2, Unlink, KeyRound, UserPlus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { z } from "zod";
 
 type AppRole = "admin" | "supervisor";
 
@@ -39,12 +40,14 @@ interface Profile {
   id: string;
   name: string;
   email: string;
+  username: string | null;
 }
 
-interface UserRole {
+interface UserRoleWithProfile {
   id: string;
   user_id: string;
   role: AppRole;
+  profile: Profile | null;
 }
 
 interface Team {
@@ -53,21 +56,34 @@ interface Team {
   type: string;
 }
 
-interface SupervisorTeam {
+interface SupervisorTeamWithData {
   id: string;
   supervisor_id: string;
   team_id: string;
-  teams?: Team;
+  team: Team | null;
+  profile: Profile | null;
 }
+
+const newUserSchema = z.object({
+  name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),
+  username: z.string().min(3, "Usuário deve ter no mínimo 3 caracteres").regex(/^[a-z0-9._]+$/, "Use apenas letras minúsculas, números, pontos e underscores"),
+  password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
+  role: z.enum(["admin", "supervisor"]),
+});
 
 const Admin = () => {
   const queryClient = useQueryClient();
-  const [searchTerm, setSearchTerm] = useState("");
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [isTeamDialogOpen, setIsTeamDialogOpen] = useState(false);
+  const [isNewUserDialogOpen, setIsNewUserDialogOpen] = useState(false);
+  const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedRole, setSelectedRole] = useState<AppRole>("supervisor");
   const [selectedTeamId, setSelectedTeamId] = useState("");
+  const [newUserForm, setNewUserForm] = useState({ name: "", username: "", password: "", role: "supervisor" as AppRole });
+  const [newPassword, setNewPassword] = useState("");
+  const [resetPasswordUserId, setResetPasswordUserId] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: profiles = [] } = useQuery({
     queryKey: ["all_profiles"],
@@ -81,15 +97,26 @@ const Admin = () => {
     },
   });
 
-  const { data: userRoles = [] } = useQuery({
-    queryKey: ["user_roles"],
+  const { data: userRolesWithProfiles = [] } = useQuery({
+    queryKey: ["user_roles_with_profiles"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: roles, error: rolesError } = await supabase
         .from("user_roles")
         .select("*")
         .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as UserRole[];
+      if (rolesError) throw rolesError;
+
+      const { data: profilesData, error: profilesError } = await supabase
+        .from("profiles")
+        .select("*");
+      if (profilesError) throw profilesError;
+
+      const profilesMap = new Map(profilesData.map((p) => [p.id, p]));
+      
+      return roles.map((role) => ({
+        ...role,
+        profile: profilesMap.get(role.user_id) || null,
+      })) as UserRoleWithProfile[];
     },
   });
 
@@ -105,15 +132,26 @@ const Admin = () => {
     },
   });
 
-  const { data: supervisorTeams = [] } = useQuery({
-    queryKey: ["supervisor_teams"],
+  const { data: supervisorTeamsWithData = [] } = useQuery({
+    queryKey: ["supervisor_teams_with_data"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: stData, error: stError } = await supabase
         .from("supervisor_teams")
-        .select(`*, teams (id, name, type)`)
+        .select("*")
         .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as SupervisorTeam[];
+      if (stError) throw stError;
+
+      const { data: profilesData } = await supabase.from("profiles").select("*");
+      const { data: teamsData } = await supabase.from("teams").select("*");
+
+      const profilesMap = new Map(profilesData?.map((p) => [p.id, p]) || []);
+      const teamsMap = new Map(teamsData?.map((t) => [t.id, t]) || []);
+
+      return stData.map((st) => ({
+        ...st,
+        profile: profilesMap.get(st.supervisor_id) || null,
+        team: teamsMap.get(st.team_id) || null,
+      })) as SupervisorTeamWithData[];
     },
   });
 
@@ -123,7 +161,7 @@ const Admin = () => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["user_roles"] });
+      queryClient.invalidateQueries({ queryKey: ["user_roles_with_profiles"] });
       toast({ title: "Função atribuída com sucesso!" });
       setIsRoleDialogOpen(false);
       setSelectedUserId("");
@@ -139,7 +177,7 @@ const Admin = () => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["user_roles"] });
+      queryClient.invalidateQueries({ queryKey: ["user_roles_with_profiles"] });
       toast({ title: "Função removida com sucesso!" });
     },
     onError: (error) => {
@@ -156,7 +194,7 @@ const Admin = () => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["supervisor_teams"] });
+      queryClient.invalidateQueries({ queryKey: ["supervisor_teams_with_data"] });
       toast({ title: "Equipe vinculada com sucesso!" });
       setIsTeamDialogOpen(false);
       setSelectedUserId("");
@@ -173,7 +211,7 @@ const Admin = () => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["supervisor_teams"] });
+      queryClient.invalidateQueries({ queryKey: ["supervisor_teams_with_data"] });
       toast({ title: "Vínculo removido com sucesso!" });
     },
     onError: (error) => {
@@ -181,9 +219,112 @@ const Admin = () => {
     },
   });
 
-  const supervisors = userRoles.filter((r) => r.role === "supervisor");
+  const createUser = useMutation({
+    mutationFn: async (data: { name: string; username: string; password: string; role: AppRole }) => {
+      // Create user with a generated email based on username
+      const email = `${data.username}@fleetcontrol.local`;
+      
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password: data.password,
+        options: {
+          data: { name: data.name, username: data.username },
+        },
+      });
+      
+      if (authError) throw authError;
+      if (!authData.user) throw new Error("Erro ao criar usuário");
+
+      // Update profile with username
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ username: data.username })
+        .eq("id", authData.user.id);
+      
+      if (profileError) throw profileError;
+
+      // Add role
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .insert({ user_id: authData.user.id, role: data.role });
+      
+      if (roleError) throw roleError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all_profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["user_roles_with_profiles"] });
+      toast({ title: "Usuário criado com sucesso!" });
+      setIsNewUserDialogOpen(false);
+      setNewUserForm({ name: "", username: "", password: "", role: "supervisor" });
+      setErrors({});
+    },
+    onError: (error) => {
+      toast({ title: "Erro ao criar usuário", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const resetPassword = useMutation({
+    mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
+      // Get user email
+      const profile = profiles.find((p) => p.id === userId);
+      if (!profile) throw new Error("Usuário não encontrado");
+
+      // Note: This requires admin privileges through Supabase dashboard or Edge Function
+      // For now, we'll update the password using admin API
+      const { error } = await supabase.auth.admin.updateUserById(userId, {
+        password: newPassword,
+      });
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Senha alterada com sucesso!" });
+      setIsResetPasswordDialogOpen(false);
+      setNewPassword("");
+      setResetPasswordUserId("");
+    },
+    onError: (error) => {
+      toast({ title: "Erro ao alterar senha", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleCreateUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrors({});
+    
+    const result = newUserSchema.safeParse(newUserForm);
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      result.error.errors.forEach((err) => {
+        if (err.path[0]) {
+          fieldErrors[err.path[0] as string] = err.message;
+        }
+      });
+      setErrors(fieldErrors);
+      return;
+    }
+
+    createUser.mutate(newUserForm);
+  };
+
+  const handleResetPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      toast({ title: "Senha deve ter no mínimo 6 caracteres", variant: "destructive" });
+      return;
+    }
+    resetPassword.mutate({ userId: resetPasswordUserId, newPassword });
+  };
+
+  const openResetPasswordDialog = (userId: string) => {
+    setResetPasswordUserId(userId);
+    setNewPassword("");
+    setIsResetPasswordDialogOpen(true);
+  };
+
+  const supervisors = userRolesWithProfiles.filter((r) => r.role === "supervisor");
   const usersWithoutRole = profiles.filter(
-    (p) => !userRoles.some((r) => r.user_id === p.id)
+    (p) => !userRolesWithProfiles.some((r) => r.user_id === p.id)
   );
 
   return (
@@ -193,8 +334,12 @@ const Admin = () => {
         <p className="text-muted-foreground">Gerencie usuários, funções e permissões</p>
       </div>
 
-      <Tabs defaultValue="roles" className="animate-fade-in">
+      <Tabs defaultValue="users" className="animate-fade-in">
         <TabsList className="mb-6">
+          <TabsTrigger value="users" className="gap-2">
+            <UserPlus className="h-4 w-4" />
+            Usuários
+          </TabsTrigger>
           <TabsTrigger value="roles" className="gap-2">
             <Shield className="h-4 w-4" />
             Funções
@@ -204,6 +349,159 @@ const Admin = () => {
             Vínculos de Equipes
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="users">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-semibold">Cadastro de Usuários</h2>
+            <Dialog open={isNewUserDialogOpen} onOpenChange={setIsNewUserDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Novo Usuário
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Novo Usuário</DialogTitle>
+                  <DialogDescription>
+                    Cadastre um novo usuário no sistema
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleCreateUser} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Nome</Label>
+                    <Input
+                      value={newUserForm.name}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, name: e.target.value })}
+                      placeholder="Nome completo"
+                    />
+                    {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Usuário</Label>
+                    <Input
+                      value={newUserForm.username}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, username: e.target.value.toLowerCase() })}
+                      placeholder="usuario.exemplo"
+                    />
+                    {errors.username && <p className="text-sm text-destructive">{errors.username}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Senha</Label>
+                    <Input
+                      type="password"
+                      value={newUserForm.password}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, password: e.target.value })}
+                      placeholder="••••••••"
+                    />
+                    {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Função</Label>
+                    <Select value={newUserForm.role} onValueChange={(v) => setNewUserForm({ ...newUserForm, role: v as AppRole })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">Administrador</SelectItem>
+                        <SelectItem value="supervisor">Supervisor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex justify-end gap-3 pt-4">
+                    <Button type="button" variant="outline" onClick={() => setIsNewUserDialogOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit" disabled={createUser.isPending}>
+                      Criar Usuário
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead>Usuário</TableHead>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Função</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {userRolesWithProfiles.map((role) => (
+                  <TableRow key={role.id} className="hover:bg-muted/30">
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <User className="h-4 w-4 text-primary" />
+                        </div>
+                        {role.profile?.username || "-"}
+                      </div>
+                    </TableCell>
+                    <TableCell>{role.profile?.name || "Usuário"}</TableCell>
+                    <TableCell>
+                      <Badge variant={role.role === "admin" ? "default" : "secondary"}>
+                        {role.role === "admin" ? "Administrador" : "Supervisor"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => openResetPasswordDialog(role.user_id)}
+                      >
+                        <KeyRound className="h-4 w-4" />
+                        Resetar Senha
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {userRolesWithProfiles.length === 0 && (
+              <div className="p-8 text-center text-muted-foreground">
+                Nenhum usuário cadastrado
+              </div>
+            )}
+          </div>
+
+          {/* Reset Password Dialog */}
+          <Dialog open={isResetPasswordDialogOpen} onOpenChange={setIsResetPasswordDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Resetar Senha</DialogTitle>
+                <DialogDescription>
+                  Digite a nova senha para o usuário
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Nova Senha</Label>
+                  <Input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    minLength={6}
+                  />
+                </div>
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button type="button" variant="outline" onClick={() => setIsResetPasswordDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={resetPassword.isPending}>
+                    Alterar Senha
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </TabsContent>
 
         <TabsContent value="roles">
           <div className="flex justify-between items-center mb-6">
@@ -232,7 +530,7 @@ const Admin = () => {
                       <SelectContent>
                         {usersWithoutRole.map((p) => (
                           <SelectItem key={p.id} value={p.id}>
-                            {p.name} ({p.email})
+                            {p.name} ({p.username || p.email})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -271,23 +569,23 @@ const Admin = () => {
               <TableHeader>
                 <TableRow className="bg-muted/50">
                   <TableHead>Usuário</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead>Nome</TableHead>
                   <TableHead>Função</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {userRoles.map((role) => (
+                {userRolesWithProfiles.map((role) => (
                   <TableRow key={role.id} className="hover:bg-muted/30">
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
                           <User className="h-4 w-4 text-primary" />
                         </div>
-                        {role.profiles?.name || "Usuário"}
+                        {role.profile?.username || "-"}
                       </div>
                     </TableCell>
-                    <TableCell>{role.profiles?.email}</TableCell>
+                    <TableCell>{role.profile?.name || "Usuário"}</TableCell>
                     <TableCell>
                       <Badge variant={role.role === "admin" ? "default" : "secondary"}>
                         {role.role === "admin" ? "Administrador" : "Supervisor"}
@@ -307,7 +605,7 @@ const Admin = () => {
                 ))}
               </TableBody>
             </Table>
-            {userRoles.length === 0 && (
+            {userRolesWithProfiles.length === 0 && (
               <div className="p-8 text-center text-muted-foreground">
                 Nenhum usuário com função atribuída
               </div>
@@ -342,7 +640,7 @@ const Admin = () => {
                       <SelectContent>
                         {supervisors.map((s) => (
                           <SelectItem key={s.user_id} value={s.user_id}>
-                            {s.profiles?.name} ({s.profiles?.email})
+                            {s.profile?.name} ({s.profile?.username || s.profile?.email})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -384,27 +682,27 @@ const Admin = () => {
               <TableHeader>
                 <TableRow className="bg-muted/50">
                   <TableHead>Supervisor</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead>Nome</TableHead>
                   <TableHead>Equipe</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {supervisorTeams.map((st) => (
+                {supervisorTeamsWithData.map((st) => (
                   <TableRow key={st.id} className="hover:bg-muted/30">
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
                           <User className="h-4 w-4 text-primary" />
                         </div>
-                        {st.profiles?.name}
+                        {st.profile?.username || "-"}
                       </div>
                     </TableCell>
-                    <TableCell>{st.profiles?.email}</TableCell>
+                    <TableCell>{st.profile?.name}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-muted-foreground" />
-                        {st.teams?.name}
+                        {st.team?.name}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
@@ -420,7 +718,7 @@ const Admin = () => {
                 ))}
               </TableBody>
             </Table>
-            {supervisorTeams.length === 0 && (
+            {supervisorTeamsWithData.length === 0 && (
               <div className="p-8 text-center text-muted-foreground">
                 Nenhum vínculo configurado
               </div>

@@ -220,6 +220,7 @@ export type Database = {
           id: string
           name: string
           updated_at: string
+          username: string | null
         }
         Insert: {
           created_at?: string
@@ -227,6 +228,7 @@ export type Database = {
           id: string
           name: string
           updated_at?: string
+          username?: string | null
         }
         Update: {
           created_at?: string
@@ -234,6 +236,7 @@ export type Database = {
           id?: string
           name?: string
           updated_at?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -269,6 +272,7 @@ export type Database = {
       teams: {
         Row: {
           created_at: string
+          has_basket: boolean
           id: string
           name: string
           type: Database["public"]["Enums"]["team_type"]
@@ -276,6 +280,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          has_basket?: boolean
           id?: string
           name: string
           type: Database["public"]["Enums"]["team_type"]
@@ -283,6 +288,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          has_basket?: boolean
           id?: string
           name?: string
           type?: Database["public"]["Enums"]["team_type"]
