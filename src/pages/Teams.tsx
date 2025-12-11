@@ -27,9 +27,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, Edit, Trash2, Users, Truck } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Users, Truck, Car } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -51,10 +50,11 @@ interface Profile {
   username: string | null;
 }
 
-interface UserRole {
+interface Vehicle {
   id: string;
-  user_id: string;
-  role: string;
+  plate: string;
+  model: string;
+  team_id: string | null;
 }
 
 const teamTypeLabels: Record<TeamType, string> = {
@@ -78,6 +78,7 @@ const Teams = () => {
     has_basket: false,
     cost_center: "",
     supervisor_id: "",
+    vehicle_id: "",
   });
 
   const { data: teams = [], isLoading } = useQuery({
@@ -89,6 +90,19 @@ const Teams = () => {
         .order("name");
       if (error) throw error;
       return data as Team[];
+    },
+  });
+
+  // Fetch vehicles for dropdown
+  const { data: vehicles = [] } = useQuery({
+    queryKey: ["vehicles"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vehicles")
+        .select("id, plate, model, team_id")
+        .order("plate");
+      if (error) throw error;
+      return data as Vehicle[];
     },
   });
 
@@ -126,8 +140,8 @@ const Teams = () => {
   });
 
   const createTeam = useMutation({
-    mutationFn: async (data: { name: string; type: TeamType; has_basket: boolean; cost_center: string; supervisor_id: string }) => {
-      const { cost_center, supervisor_id, ...teamData } = data;
+    mutationFn: async (data: { name: string; type: TeamType; has_basket: boolean; cost_center: string; supervisor_id: string; vehicle_id: string }) => {
+      const { cost_center, supervisor_id, vehicle_id, ...teamData } = data;
       const { data: newTeam, error } = await supabase
         .from("teams")
         .insert({ ...teamData, cost_center: cost_center || null })
@@ -142,10 +156,20 @@ const Teams = () => {
           .insert({ supervisor_id, team_id: newTeam.id });
         if (stError) console.error("Error assigning supervisor:", stError);
       }
+
+      // If vehicle is selected, update the vehicle's team_id
+      if (vehicle_id && newTeam) {
+        const { error: vError } = await supabase
+          .from("vehicles")
+          .update({ team_id: newTeam.id })
+          .eq("id", vehicle_id);
+        if (vError) console.error("Error assigning vehicle:", vError);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["teams"] });
       queryClient.invalidateQueries({ queryKey: ["supervisor_teams"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       toast({ title: "Equipe criada com sucesso!" });
       resetForm();
     },
@@ -155,8 +179,8 @@ const Teams = () => {
   });
 
   const updateTeam = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { name: string; type: TeamType; has_basket: boolean; cost_center: string; supervisor_id: string } }) => {
-      const { cost_center, supervisor_id, ...teamData } = data;
+    mutationFn: async ({ id, data }: { id: string; data: { name: string; type: TeamType; has_basket: boolean; cost_center: string; supervisor_id: string; vehicle_id: string } }) => {
+      const { cost_center, supervisor_id, vehicle_id, ...teamData } = data;
       const { error } = await supabase
         .from("teams")
         .update({ ...teamData, cost_center: cost_center || null })
@@ -164,20 +188,30 @@ const Teams = () => {
       if (error) throw error;
 
       // Update supervisor assignment
-      // First remove existing assignment for this team
       await supabase.from("supervisor_teams").delete().eq("team_id", id);
-      
-      // Then add new assignment if supervisor is selected
       if (supervisor_id) {
         const { error: stError } = await supabase
           .from("supervisor_teams")
           .insert({ supervisor_id, team_id: id });
         if (stError) console.error("Error assigning supervisor:", stError);
       }
+
+      // Update vehicle assignment - first remove old assignment for this team
+      await supabase.from("vehicles").update({ team_id: null }).eq("team_id", id);
+      
+      // Then assign new vehicle if selected
+      if (vehicle_id) {
+        const { error: vError } = await supabase
+          .from("vehicles")
+          .update({ team_id: id })
+          .eq("id", vehicle_id);
+        if (vError) console.error("Error assigning vehicle:", vError);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["teams"] });
       queryClient.invalidateQueries({ queryKey: ["supervisor_teams"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       toast({ title: "Equipe atualizada com sucesso!" });
       resetForm();
     },
@@ -188,11 +222,14 @@ const Teams = () => {
 
   const deleteTeam = useMutation({
     mutationFn: async (id: string) => {
+      // First unlink vehicle
+      await supabase.from("vehicles").update({ team_id: null }).eq("team_id", id);
       const { error } = await supabase.from("teams").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["teams"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       toast({ title: "Equipe removida com sucesso!" });
     },
     onError: (error) => {
@@ -220,14 +257,15 @@ const Teams = () => {
 
   const handleEdit = (team: Team) => {
     setEditingTeam(team);
-    // Find current supervisor for this team
     const assignment = supervisorTeams.find((st) => st.team_id === team.id);
+    const linkedVehicle = vehicles.find((v) => v.team_id === team.id);
     setFormData({ 
       name: team.name, 
       type: team.type, 
       has_basket: team.has_basket,
       cost_center: team.cost_center || "",
       supervisor_id: assignment?.supervisor_id || "",
+      vehicle_id: linkedVehicle?.id || "",
     });
     setIsDialogOpen(true);
   };
@@ -239,7 +277,7 @@ const Teams = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: "", type: "linha_viva", has_basket: false, cost_center: "", supervisor_id: "" });
+    setFormData({ name: "", type: "linha_viva", has_basket: false, cost_center: "", supervisor_id: "", vehicle_id: "" });
     setEditingTeam(null);
     setIsDialogOpen(false);
   };
@@ -250,6 +288,16 @@ const Teams = () => {
     if (!assignment) return null;
     const supervisor = supervisors.find((s) => s.id === assignment.supervisor_id);
     return supervisor?.name || supervisor?.username || null;
+  };
+
+  // Helper to get vehicle for a team
+  const getTeamVehicle = (teamId: string) => {
+    return vehicles.find((v) => v.team_id === teamId);
+  };
+
+  // Get available vehicles (not assigned to any team or assigned to current editing team)
+  const getAvailableVehicles = () => {
+    return vehicles.filter((v) => !v.team_id || (editingTeam && v.team_id === editingTeam.id));
   };
 
   return (
@@ -300,7 +348,7 @@ const Teams = () => {
                 Nova Equipe
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>{editingTeam ? "Editar Equipe" : "Nova Equipe"}</DialogTitle>
                 <DialogDescription>
@@ -318,35 +366,56 @@ const Teams = () => {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="type">Tipo</Label>
-                  <Select
-                    value={formData.type}
-                    onValueChange={(value: TeamType) => setFormData({ ...formData, type: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="linha_viva">Linha Viva</SelectItem>
-                      <SelectItem value="linha_morta">Linha Morta</SelectItem>
-                      <SelectItem value="poda">Poda</SelectItem>
-                      <SelectItem value="linha_morta_obras">Linha Morta Obras</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Tipo</Label>
+                    <Select
+                      value={formData.type}
+                      onValueChange={(value: TeamType) => setFormData({ ...formData, type: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="linha_viva">Linha Viva</SelectItem>
+                        <SelectItem value="linha_morta">Linha Morta</SelectItem>
+                        <SelectItem value="poda">Poda</SelectItem>
+                        <SelectItem value="linha_morta_obras">Linha Morta Obras</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cost_center">Centro de Custo</Label>
+                    <Input
+                      id="cost_center"
+                      value={formData.cost_center}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                        setFormData({ ...formData, cost_center: value });
+                      }}
+                      placeholder="000000"
+                      maxLength={6}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="cost_center">Centro de Custo (6 dígitos)</Label>
-                  <Input
-                    id="cost_center"
-                    value={formData.cost_center}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, "").slice(0, 6);
-                      setFormData({ ...formData, cost_center: value });
-                    }}
-                    placeholder="000000"
-                    maxLength={6}
-                  />
+                  <Label htmlFor="vehicle">Veículo Vinculado</Label>
+                  <Select
+                    value={formData.vehicle_id || "none"}
+                    onValueChange={(value) => setFormData({ ...formData, vehicle_id: value === "none" ? "" : value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um veículo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum</SelectItem>
+                      {getAvailableVehicles().map((vehicle) => (
+                        <SelectItem key={vehicle.id} value={vehicle.id}>
+                          {vehicle.plate} - {vehicle.model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="supervisor">Supervisor Responsável</Label>
@@ -400,55 +469,69 @@ const Teams = () => {
               <TableHead>Nome</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Centro de Custo</TableHead>
+              <TableHead>Veículo</TableHead>
               <TableHead>Supervisor</TableHead>
               <TableHead>Cesto Aéreo</TableHead>
               {isAdmin && <TableHead className="text-right">Ações</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredTeams.map((team) => (
-              <TableRow key={team.id} className="hover:bg-muted/30">
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-primary" />
-                    {team.name}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                    {teamTypeLabels[team.type]}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  {team.cost_center || <span className="text-muted-foreground">-</span>}
-                </TableCell>
-                <TableCell>
-                  {getSupervisorName(team.id) || <span className="text-muted-foreground">-</span>}
-                </TableCell>
-                <TableCell>
-                  {team.has_basket ? (
-                    <span className="flex items-center gap-1 text-green-600">
-                      <Truck className="h-4 w-4" />
-                      Sim
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">Não</span>
-                  )}
-                </TableCell>
-                {isAdmin && (
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(team)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(team.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+            {filteredTeams.map((team) => {
+              const vehicle = getTeamVehicle(team.id);
+              return (
+                <TableRow key={team.id} className="hover:bg-muted/30">
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-primary" />
+                      {team.name}
                     </div>
                   </TableCell>
-                )}
-              </TableRow>
-            ))}
+                  <TableCell>
+                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                      {teamTypeLabels[team.type]}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    {team.cost_center || <span className="text-muted-foreground">-</span>}
+                  </TableCell>
+                  <TableCell>
+                    {vehicle ? (
+                      <div className="flex items-center gap-2">
+                        <Car className="h-4 w-4 text-primary" />
+                        <span>{vehicle.plate}</span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {getSupervisorName(team.id) || <span className="text-muted-foreground">-</span>}
+                  </TableCell>
+                  <TableCell>
+                    {team.has_basket ? (
+                      <span className="flex items-center gap-1 text-green-600">
+                        <Truck className="h-4 w-4" />
+                        Sim
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">Não</span>
+                    )}
+                  </TableCell>
+                  {isAdmin && (
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(team)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(team.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
         {isLoading && (
