@@ -351,14 +351,14 @@ const Teams = () => {
                 <div className="space-y-2">
                   <Label htmlFor="supervisor">Supervisor Responsável</Label>
                   <Select
-                    value={formData.supervisor_id}
-                    onValueChange={(value) => setFormData({ ...formData, supervisor_id: value })}
+                    value={formData.supervisor_id || "none"}
+                    onValueChange={(value) => setFormData({ ...formData, supervisor_id: value === "none" ? "" : value })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione um supervisor" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Nenhum</SelectItem>
+                      <SelectItem value="none">Nenhum</SelectItem>
                       {supervisors.map((sup) => (
                         <SelectItem key={sup.id} value={sup.id}>
                           {sup.name} {sup.username ? `(${sup.username})` : ""}
