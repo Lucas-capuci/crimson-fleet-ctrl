@@ -221,34 +221,15 @@ const Admin = () => {
 
   const createUser = useMutation({
     mutationFn: async (data: { name: string; username: string; password: string; role: AppRole }) => {
-      // Create user with a generated email based on username
-      const email = `${data.username}@fleetcontrol.local`;
-      
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password: data.password,
-        options: {
-          data: { name: data.name, username: data.username },
-        },
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) throw new Error("Não autenticado");
+
+      const response = await supabase.functions.invoke("manage-users", {
+        body: { action: "create", ...data },
       });
-      
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("Erro ao criar usuário");
 
-      // Update profile with username
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({ username: data.username })
-        .eq("id", authData.user.id);
-      
-      if (profileError) throw profileError;
-
-      // Add role
-      const { error: roleError } = await supabase
-        .from("user_roles")
-        .insert({ user_id: authData.user.id, role: data.role });
-      
-      if (roleError) throw roleError;
+      if (response.error) throw new Error(response.error.message);
+      if (response.data?.error) throw new Error(response.data.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["all_profiles"] });
@@ -265,17 +246,15 @@ const Admin = () => {
 
   const resetPassword = useMutation({
     mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
-      // Get user email
-      const profile = profiles.find((p) => p.id === userId);
-      if (!profile) throw new Error("Usuário não encontrado");
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) throw new Error("Não autenticado");
 
-      // Note: This requires admin privileges through Supabase dashboard or Edge Function
-      // For now, we'll update the password using admin API
-      const { error } = await supabase.auth.admin.updateUserById(userId, {
-        password: newPassword,
+      const response = await supabase.functions.invoke("manage-users", {
+        body: { action: "reset-password", userId, newPassword },
       });
-      
-      if (error) throw error;
+
+      if (response.error) throw new Error(response.error.message);
+      if (response.data?.error) throw new Error(response.data.error);
     },
     onSuccess: () => {
       toast({ title: "Senha alterada com sucesso!" });

@@ -271,6 +271,7 @@ export type Database = {
       }
       teams: {
         Row: {
+          cost_center: string | null
           created_at: string
           has_basket: boolean
           id: string
@@ -279,6 +280,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          cost_center?: string | null
           created_at?: string
           has_basket?: boolean
           id?: string
@@ -287,6 +289,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          cost_center?: string | null
           created_at?: string
           has_basket?: boolean
           id?: string
