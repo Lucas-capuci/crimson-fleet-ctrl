@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,82 +21,170 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Wrench, Calendar, AlertCircle, CheckCircle } from "lucide-react";
+import { Plus, Search, Wrench, Calendar, AlertCircle, CheckCircle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
-interface Maintenance {
-  id: number;
-  vehiclePlate: string;
-  vehicleModel: string;
+type MaintenanceStatus = "pendente" | "em_andamento" | "concluida";
+
+interface MaintenanceRecord {
+  id: string;
+  vehicle_id: string;
   type: string;
-  description: string;
-  date: string;
-  cost: number;
-  status: "completed" | "pending" | "overdue";
+  description: string | null;
+  scheduled_date: string | null;
+  completed_date: string | null;
+  cost: number | null;
+  status: MaintenanceStatus;
+  vehicles?: {
+    plate: string;
+    model: string;
+    team_id: string | null;
+  };
 }
 
-const initialMaintenances: Maintenance[] = [
-  { id: 1, vehiclePlate: "ABC-1234", vehicleModel: "Fiat Strada", type: "Troca de óleo", description: "Troca de óleo e filtro", date: "2024-12-05", cost: 350, status: "completed" },
-  { id: 2, vehiclePlate: "DEF-5678", vehicleModel: "VW Saveiro", type: "Revisão geral", description: "Revisão dos 40.000km", date: "2024-12-08", cost: 1200, status: "pending" },
-  { id: 3, vehiclePlate: "GHI-9012", vehicleModel: "Toyota Hilux", type: "Alinhamento", description: "Alinhamento e balanceamento", date: "2024-12-01", cost: 180, status: "overdue" },
-  { id: 4, vehiclePlate: "JKL-3456", vehicleModel: "Ford Ranger", type: "Troca de pneus", description: "4 pneus novos", date: "2024-12-10", cost: 2400, status: "pending" },
-  { id: 5, vehiclePlate: "MNO-7890", vehicleModel: "Chevrolet S10", type: "Freios", description: "Pastilhas e discos dianteiros", date: "2024-11-28", cost: 800, status: "completed" },
-];
+interface Team {
+  id: string;
+  name: string;
+  vehicles: {
+    id: string;
+    plate: string;
+    model: string;
+  } | null;
+}
 
 const statusConfig = {
-  completed: { icon: CheckCircle, label: "Concluída", className: "status-available" },
-  pending: { icon: Wrench, label: "Pendente", className: "status-maintenance" },
-  overdue: { icon: AlertCircle, label: "Atrasada", className: "status-in-use" },
+  concluida: { icon: CheckCircle, label: "Concluída", className: "status-available" },
+  pendente: { icon: Clock, label: "Pendente", className: "status-maintenance" },
+  em_andamento: { icon: Wrench, label: "Em Andamento", className: "status-in-use" },
 };
 
 const Maintenance = () => {
-  const [maintenances, setMaintenances] = useState<Maintenance[]>(initialMaintenances);
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
-    vehiclePlate: "",
-    vehicleModel: "",
+    team_id: "",
     type: "",
     description: "",
-    date: "",
+    scheduled_date: "",
     cost: "",
-    status: "pending" as Maintenance["status"],
+    status: "pendente" as MaintenanceStatus,
   });
 
-  const completedMaintenances = maintenances.filter(m => m.status === "completed");
-  const upcomingMaintenances = maintenances.filter(m => m.status !== "completed");
+  const { data: maintenances = [], isLoading } = useQuery({
+    queryKey: ["maintenance_records"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("maintenance_records")
+        .select(`
+          *,
+          vehicles (
+            plate,
+            model,
+            team_id
+          )
+        `)
+        .order("scheduled_date", { ascending: false });
+      if (error) throw error;
+      return data as MaintenanceRecord[];
+    },
+  });
+
+  const { data: teams = [] } = useQuery({
+    queryKey: ["teams_with_vehicles"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("teams")
+        .select(`
+          id,
+          name,
+          vehicles (
+            id,
+            plate,
+            model
+          )
+        `)
+        .order("name");
+      if (error) throw error;
+      return data as Team[];
+    },
+  });
+
+  const { data: teamsMap = {} } = useQuery({
+    queryKey: ["teams_map"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("teams")
+        .select("id, name");
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      data.forEach(t => { map[t.id] = t.name; });
+      return map;
+    },
+  });
+
+  const createMaintenance = useMutation({
+    mutationFn: async (data: typeof formData) => {
+      const team = teams.find(t => t.id === data.team_id);
+      if (!team?.vehicles) throw new Error("Equipe sem veículo vinculado");
+      
+      const { error } = await supabase.from("maintenance_records").insert({
+        vehicle_id: team.vehicles.id,
+        type: data.type,
+        description: data.description || null,
+        scheduled_date: data.scheduled_date || null,
+        cost: data.cost ? parseFloat(data.cost) : null,
+        status: data.status,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["maintenance_records"] });
+      toast({ title: "Manutenção registrada com sucesso!" });
+      resetForm();
+    },
+    onError: (error) => {
+      toast({ title: "Erro ao registrar manutenção", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const markAsCompleted = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("maintenance_records")
+        .update({ status: "concluida" as MaintenanceStatus, completed_date: new Date().toISOString().split('T')[0] })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["maintenance_records"] });
+      toast({ title: "Manutenção marcada como concluída!" });
+    },
+  });
+
+  const completedMaintenances = maintenances.filter(m => m.status === "concluida");
+  const upcomingMaintenances = maintenances.filter(m => m.status !== "concluida");
+
+  const getTeamName = (teamId: string | null) => {
+    if (!teamId) return "Sem equipe";
+    return teamsMap[teamId] || "Sem equipe";
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const newMaintenance: Maintenance = {
-      id: Date.now(),
-      vehiclePlate: formData.vehiclePlate,
-      vehicleModel: formData.vehicleModel,
-      type: formData.type,
-      description: formData.description,
-      date: formData.date,
-      cost: parseFloat(formData.cost),
-      status: formData.status,
-    };
-    setMaintenances([...maintenances, newMaintenance]);
-    toast({ title: "Manutenção registrada com sucesso!" });
-    resetForm();
+    createMaintenance.mutate(formData);
   };
 
   const resetForm = () => {
-    setFormData({ vehiclePlate: "", vehicleModel: "", type: "", description: "", date: "", cost: "", status: "pending" });
+    setFormData({ team_id: "", type: "", description: "", scheduled_date: "", cost: "", status: "pendente" });
     setIsDialogOpen(false);
   };
 
-  const markAsCompleted = (id: number) => {
-    setMaintenances(maintenances.map(m => 
-      m.id === id ? { ...m, status: "completed" as const } : m
-    ));
-    toast({ title: "Manutenção marcada como concluída!" });
-  };
+  const teamsWithVehicles = teams.filter(t => t.vehicles);
 
-  const MaintenanceCard = ({ maintenance }: { maintenance: Maintenance }) => {
+  const MaintenanceCard = ({ maintenance }: { maintenance: MaintenanceRecord }) => {
     const status = statusConfig[maintenance.status];
     const StatusIcon = status.icon;
     
@@ -109,7 +198,10 @@ const Maintenance = () => {
             <div>
               <h4 className="font-semibold text-foreground">{maintenance.type}</h4>
               <p className="text-sm text-muted-foreground">
-                {maintenance.vehicleModel} • {maintenance.vehiclePlate}
+                {maintenance.vehicles?.model} • {maintenance.vehicles?.plate}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {getTeamName(maintenance.vehicles?.team_id || null)}
               </p>
             </div>
           </div>
@@ -118,18 +210,25 @@ const Maintenance = () => {
             {status.label}
           </span>
         </div>
-        <p className="text-sm text-muted-foreground mb-4">{maintenance.description}</p>
+        {maintenance.description && (
+          <p className="text-sm text-muted-foreground mb-4">{maintenance.description}</p>
+        )}
         <div className="flex items-center justify-between pt-4 border-t border-border">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Calendar className="h-4 w-4" />
-            {new Date(maintenance.date).toLocaleDateString("pt-BR")}
+            {maintenance.scheduled_date 
+              ? new Date(maintenance.scheduled_date).toLocaleDateString("pt-BR")
+              : "Sem data"
+            }
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-lg font-bold text-primary">
-              R$ {maintenance.cost.toLocaleString("pt-BR")}
-            </span>
-            {maintenance.status !== "completed" && (
-              <Button size="sm" variant="outline" onClick={() => markAsCompleted(maintenance.id)}>
+            {maintenance.cost && (
+              <span className="text-lg font-bold text-primary">
+                R$ {maintenance.cost.toLocaleString("pt-BR")}
+              </span>
+            )}
+            {maintenance.status !== "concluida" && (
+              <Button size="sm" variant="outline" onClick={() => markAsCompleted.mutate(maintenance.id)}>
                 Concluir
               </Button>
             )}
@@ -167,30 +266,26 @@ const Maintenance = () => {
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Registrar Manutenção</DialogTitle>
-              <DialogDescription>Preencha os dados da manutenção</DialogDescription>
+              <DialogDescription>Selecione a equipe para vincular ao veículo</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="vehiclePlate">Placa</Label>
-                  <Input
-                    id="vehiclePlate"
-                    value={formData.vehiclePlate}
-                    onChange={(e) => setFormData({ ...formData, vehiclePlate: e.target.value })}
-                    placeholder="ABC-1234"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="vehicleModel">Modelo</Label>
-                  <Input
-                    id="vehicleModel"
-                    value={formData.vehicleModel}
-                    onChange={(e) => setFormData({ ...formData, vehicleModel: e.target.value })}
-                    placeholder="Fiat Strada"
-                    required
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="team">Equipe</Label>
+                <Select
+                  value={formData.team_id}
+                  onValueChange={(value) => setFormData({ ...formData, team_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a equipe" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teamsWithVehicles.map((team) => (
+                      <SelectItem key={team.id} value={team.id}>
+                        {team.name} ({team.vehicles?.plate})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -204,13 +299,12 @@ const Maintenance = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="date">Data</Label>
+                  <Label htmlFor="scheduled_date">Data Prevista</Label>
                   <Input
-                    id="date"
+                    id="scheduled_date"
                     type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    required
+                    value={formData.scheduled_date}
+                    onChange={(e) => setFormData({ ...formData, scheduled_date: e.target.value })}
                   />
                 </div>
               </div>
@@ -224,21 +318,21 @@ const Maintenance = () => {
                     value={formData.cost}
                     onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
                     placeholder="350.00"
-                    required
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
                   <Select
                     value={formData.status}
-                    onValueChange={(value: Maintenance["status"]) => setFormData({ ...formData, status: value })}
+                    onValueChange={(value: MaintenanceStatus) => setFormData({ ...formData, status: value })}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pending">Pendente</SelectItem>
-                      <SelectItem value="completed">Concluída</SelectItem>
+                      <SelectItem value="pendente">Pendente</SelectItem>
+                      <SelectItem value="em_andamento">Em Andamento</SelectItem>
+                      <SelectItem value="concluida">Concluída</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -249,13 +343,15 @@ const Maintenance = () => {
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Descreva a manutenção realizada..."
+                  placeholder="Descreva a manutenção..."
                   rows={3}
                 />
               </div>
               <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={resetForm}>Cancelar</Button>
-                <Button type="submit">Registrar</Button>
+                <Button type="submit" disabled={createMaintenance.isPending || !formData.team_id}>
+                  Registrar
+                </Button>
               </div>
             </form>
           </DialogContent>

@@ -21,11 +21,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Wrench, Clock, CheckCircle, Calendar, Car } from "lucide-react";
+import { Plus, Search, Wrench, Clock, CheckCircle, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 import { differenceInHours, differenceInDays } from "date-fns";
 
 type MaintenanceStatus = "pendente" | "em_andamento" | "concluida";
@@ -41,14 +40,18 @@ interface WorkshopEntry {
   vehicles?: {
     plate: string;
     model: string;
-    teams?: { name: string } | null;
+    team_id: string | null;
   };
 }
 
-interface Vehicle {
+interface Team {
   id: string;
-  plate: string;
-  model: string;
+  name: string;
+  vehicles: {
+    id: string;
+    plate: string;
+    model: string;
+  } | null;
 }
 
 const statusConfig = {
@@ -58,12 +61,11 @@ const statusConfig = {
 };
 
 const Workshop = () => {
-  const { isAdmin, userTeamIds } = useAuth();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
-    vehicle_id: "",
+    team_id: "",
     reason: "",
     notes: "",
   });
@@ -78,7 +80,7 @@ const Workshop = () => {
           vehicles (
             plate,
             model,
-            teams ( name )
+            team_id
           )
         `)
         .order("entry_date", { ascending: false });
@@ -87,22 +89,46 @@ const Workshop = () => {
     },
   });
 
-  const { data: vehicles = [] } = useQuery({
-    queryKey: ["vehicles_for_workshop"],
+  const { data: teams = [] } = useQuery({
+    queryKey: ["teams_with_vehicles"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("vehicles")
-        .select("id, plate, model")
-        .order("plate");
+        .from("teams")
+        .select(`
+          id,
+          name,
+          vehicles (
+            id,
+            plate,
+            model
+          )
+        `)
+        .order("name");
       if (error) throw error;
-      return data as Vehicle[];
+      return data as Team[];
+    },
+  });
+
+  const { data: teamsMap = {} } = useQuery({
+    queryKey: ["teams_map"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("teams")
+        .select("id, name");
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      data.forEach(t => { map[t.id] = t.name; });
+      return map;
     },
   });
 
   const createEntry = useMutation({
-    mutationFn: async (data: { vehicle_id: string; reason: string; notes: string }) => {
+    mutationFn: async (data: typeof formData) => {
+      const team = teams.find(t => t.id === data.team_id);
+      if (!team?.vehicles) throw new Error("Equipe sem veículo vinculado");
+      
       const { error } = await supabase.from("workshop_entries").insert({
-        vehicle_id: data.vehicle_id,
+        vehicle_id: team.vehicles.id,
         reason: data.reason,
         notes: data.notes || null,
         status: "em_andamento" as MaintenanceStatus,
@@ -110,7 +136,7 @@ const Workshop = () => {
       if (error) throw error;
       
       // Update vehicle status to oficina
-      await supabase.from("vehicles").update({ status: "oficina" }).eq("id", data.vehicle_id);
+      await supabase.from("vehicles").update({ status: "oficina" }).eq("id", team.vehicles.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workshop_entries"] });
@@ -147,6 +173,11 @@ const Workshop = () => {
   const activeEntries = entries.filter((e) => e.status !== "concluida");
   const completedEntries = entries.filter((e) => e.status === "concluida");
 
+  const getTeamName = (teamId: string | null) => {
+    if (!teamId) return "Sem equipe";
+    return teamsMap[teamId] || "Sem equipe";
+  };
+
   const calculateDowntime = (entryDate: string, exitDate: string | null) => {
     const start = new Date(entryDate);
     const end = exitDate ? new Date(exitDate) : new Date();
@@ -165,9 +196,11 @@ const Workshop = () => {
   };
 
   const resetForm = () => {
-    setFormData({ vehicle_id: "", reason: "", notes: "" });
+    setFormData({ team_id: "", reason: "", notes: "" });
     setIsDialogOpen(false);
   };
+
+  const teamsWithVehicles = teams.filter(t => t.vehicles);
 
   const EntryCard = ({ entry }: { entry: WorkshopEntry }) => {
     const status = statusConfig[entry.status];
@@ -186,7 +219,7 @@ const Workshop = () => {
                 {entry.vehicles?.plate} - {entry.vehicles?.model}
               </h4>
               <p className="text-sm text-muted-foreground">
-                {entry.vehicles?.teams?.name || "Sem equipe"}
+                {getTeamName(entry.vehicles?.team_id || null)}
               </p>
             </div>
           </div>
@@ -250,22 +283,22 @@ const Workshop = () => {
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Registrar Entrada na Oficina</DialogTitle>
-              <DialogDescription>Registre a entrada de um veículo na oficina</DialogDescription>
+              <DialogDescription>Selecione a equipe para vincular ao veículo</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="vehicle">Veículo</Label>
+                <Label htmlFor="team">Equipe</Label>
                 <Select
-                  value={formData.vehicle_id}
-                  onValueChange={(value) => setFormData({ ...formData, vehicle_id: value })}
+                  value={formData.team_id}
+                  onValueChange={(value) => setFormData({ ...formData, team_id: value })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione o veículo" />
+                    <SelectValue placeholder="Selecione a equipe" />
                   </SelectTrigger>
                   <SelectContent>
-                    {vehicles.map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
-                        {v.plate} - {v.model}
+                    {teamsWithVehicles.map((team) => (
+                      <SelectItem key={team.id} value={team.id}>
+                        {team.name} ({team.vehicles?.plate})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -295,7 +328,7 @@ const Workshop = () => {
                 <Button type="button" variant="outline" onClick={resetForm}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={createEntry.isPending}>
+                <Button type="submit" disabled={createEntry.isPending || !formData.team_id}>
                   Registrar
                 </Button>
               </div>
