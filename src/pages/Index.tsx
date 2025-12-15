@@ -1,8 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { StatsCard } from "@/components/dashboard/StatsCard";
-import { FleetChart } from "@/components/dashboard/FleetChart";
-import { VehicleStatusChart } from "@/components/dashboard/VehicleStatusChart";
 import { DeparturesOverview } from "@/components/dashboard/DeparturesOverview";
 import { Car, Wrench, Users, LogIn } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -87,13 +85,7 @@ const Dashboard = () => {
         />
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <FleetChart />
-        <VehicleStatusChart />
-      </div>
-
-      {/* Departures Overview */}
+      {/* Departures Overview with KPIs */}
       <DeparturesOverview />
     </MainLayout>
   );
