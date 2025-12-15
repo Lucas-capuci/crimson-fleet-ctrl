@@ -65,6 +65,50 @@ export type Database = {
           },
         ]
       }
+      departures: {
+        Row: {
+          created_at: string
+          date: string
+          departed: boolean
+          departure_time: string | null
+          id: string
+          no_departure_reason: string | null
+          supervisor_id: string
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          departed?: boolean
+          departure_time?: string | null
+          id?: string
+          no_departure_reason?: string | null
+          supervisor_id: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          departed?: boolean
+          departure_time?: string | null
+          id?: string
+          no_departure_reason?: string | null
+          supervisor_id?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "departures_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       drivers: {
         Row: {
           contato: string | null
