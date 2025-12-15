@@ -3,9 +3,10 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { StatsCard } from "@/components/dashboard/StatsCard";
 import { FleetChart } from "@/components/dashboard/FleetChart";
 import { VehicleStatusChart } from "@/components/dashboard/VehicleStatusChart";
-import { RecentMaintenance } from "@/components/dashboard/RecentMaintenance";
-import { Car, Wrench, Users, AlertTriangle } from "lucide-react";
+import { DeparturesOverview } from "@/components/dashboard/DeparturesOverview";
+import { Car, Wrench, Users, LogIn } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
 
 const Dashboard = () => {
   const { data: vehicleStats } = useQuery({
@@ -33,15 +34,18 @@ const Dashboard = () => {
     },
   });
 
-  const { data: pendingAlerts } = useQuery({
-    queryKey: ["dashboard_pending_alerts"],
+  const { data: departureStats } = useQuery({
+    queryKey: ["dashboard_departures_count"],
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from("maintenance_records")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pendente");
+      const today = format(new Date(), "yyyy-MM-dd");
+      const { data, error } = await supabase
+        .from("departures")
+        .select("departed")
+        .eq("date", today);
       if (error) throw error;
-      return count || 0;
+      
+      const departed = data.filter(d => d.departed).length;
+      return { total: data.length, departed };
     },
   });
 
@@ -76,10 +80,10 @@ const Dashboard = () => {
           variant="success"
         />
         <StatsCard
-          title="Manutenções Pendentes"
-          value={pendingAlerts ?? 0}
-          icon={AlertTriangle}
-          variant="destructive"
+          title="Saídas Hoje"
+          value={`${departureStats?.departed ?? 0}/${departureStats?.total ?? 0}`}
+          icon={LogIn}
+          variant="success"
         />
       </div>
 
@@ -89,8 +93,8 @@ const Dashboard = () => {
         <VehicleStatusChart />
       </div>
 
-      {/* Recent Maintenance */}
-      <RecentMaintenance />
+      {/* Departures Overview */}
+      <DeparturesOverview />
     </MainLayout>
   );
 };

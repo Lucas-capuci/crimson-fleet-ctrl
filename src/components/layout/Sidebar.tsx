@@ -2,9 +2,7 @@ import { NavLink } from "@/components/NavLink";
 import {
   LayoutDashboard,
   Car,
-  Wrench,
   Users,
-  AlertTriangle,
   Menu,
   X,
   Truck,
@@ -12,6 +10,7 @@ import {
   Building,
   Shield,
   LogOut,
+  LogIn,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -22,6 +21,7 @@ const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Equipes", url: "/equipes", icon: Users2 },
   { title: "Veículos", url: "/veiculos", icon: Car },
+  { title: "Saída", url: "/saida", icon: LogIn },
   { title: "Oficina", url: "/oficina", icon: Building },
   { title: "Motoristas", url: "/motoristas", icon: Users },
 ];
