@@ -8,9 +8,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Vehicles from "./pages/Vehicles";
-import Maintenance from "./pages/Maintenance";
 import Drivers from "./pages/Drivers";
-import Incidents from "./pages/Incidents";
 import Teams from "./pages/Teams";
 import Workshop from "./pages/Workshop";
 import Admin from "./pages/Admin";
@@ -29,9 +27,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/veiculos" element={<ProtectedRoute><Vehicles /></ProtectedRoute>} />
-            <Route path="/manutencao" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
             <Route path="/motoristas" element={<ProtectedRoute><Drivers /></ProtectedRoute>} />
-            <Route path="/ocorrencias" element={<ProtectedRoute><Incidents /></ProtectedRoute>} />
             <Route path="/equipes" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
             <Route path="/oficina" element={<ProtectedRoute><Workshop /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
