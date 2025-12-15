@@ -21,7 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Wrench, Clock, CheckCircle, Calendar } from "lucide-react";
+import { Plus, Search, Wrench, Clock, CheckCircle, Calendar, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -64,8 +64,12 @@ const Workshop = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isExitDialogOpen, setIsExitDialogOpen] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<WorkshopEntry | null>(null);
+  const [exitDate, setExitDate] = useState("");
   const [formData, setFormData] = useState({
     team_id: "",
+    entry_date: new Date().toISOString().split("T")[0],
     reason: "",
     notes: "",
   });
@@ -129,6 +133,7 @@ const Workshop = () => {
       
       const { error } = await supabase.from("workshop_entries").insert({
         vehicle_id: team.vehicles.id,
+        entry_date: new Date(data.entry_date).toISOString(),
         reason: data.reason,
         notes: data.notes || null,
         status: "em_andamento" as MaintenanceStatus,
@@ -149,11 +154,14 @@ const Workshop = () => {
     },
   });
 
-  const markAsCompleted = useMutation({
-    mutationFn: async (entry: WorkshopEntry) => {
+  const registerExit = useMutation({
+    mutationFn: async ({ entry, exitDate }: { entry: WorkshopEntry; exitDate: string }) => {
       const { error } = await supabase
         .from("workshop_entries")
-        .update({ status: "concluida" as MaintenanceStatus, exit_date: new Date().toISOString() })
+        .update({ 
+          status: "concluida" as MaintenanceStatus, 
+          exit_date: new Date(exitDate).toISOString() 
+        })
         .eq("id", entry.id);
       if (error) throw error;
       
@@ -164,6 +172,9 @@ const Workshop = () => {
       queryClient.invalidateQueries({ queryKey: ["workshop_entries"] });
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       toast({ title: "Saída da oficina registrada!" });
+      setIsExitDialogOpen(false);
+      setSelectedEntry(null);
+      setExitDate("");
     },
     onError: (error) => {
       toast({ title: "Erro ao registrar saída", description: error.message, variant: "destructive" });
@@ -195,8 +206,26 @@ const Workshop = () => {
     createEntry.mutate(formData);
   };
 
+  const handleExitSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedEntry && exitDate) {
+      registerExit.mutate({ entry: selectedEntry, exitDate });
+    }
+  };
+
+  const openExitDialog = (entry: WorkshopEntry) => {
+    setSelectedEntry(entry);
+    setExitDate(new Date().toISOString().split("T")[0]);
+    setIsExitDialogOpen(true);
+  };
+
   const resetForm = () => {
-    setFormData({ team_id: "", reason: "", notes: "" });
+    setFormData({ 
+      team_id: "", 
+      entry_date: new Date().toISOString().split("T")[0], 
+      reason: "", 
+      notes: "" 
+    });
     setIsDialogOpen(false);
   };
 
@@ -240,13 +269,20 @@ const Workshop = () => {
               <Calendar className="h-4 w-4" />
               Entrada: {new Date(entry.entry_date).toLocaleDateString("pt-BR")}
             </div>
+            {entry.exit_date && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <LogOut className="h-4 w-4" />
+                Saída: {new Date(entry.exit_date).toLocaleDateString("pt-BR")}
+              </div>
+            )}
             <div className="flex items-center gap-2 text-sm">
               <Clock className="h-4 w-4 text-primary" />
               <span className="font-medium text-primary">Tempo parado: {downtime}</span>
             </div>
           </div>
           {entry.status !== "concluida" && (
-            <Button size="sm" onClick={() => markAsCompleted.mutate(entry)}>
+            <Button size="sm" onClick={() => openExitDialog(entry)} className="gap-2">
+              <LogOut className="h-4 w-4" />
               Registrar Saída
             </Button>
           )}
@@ -283,7 +319,7 @@ const Workshop = () => {
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Registrar Entrada na Oficina</DialogTitle>
-              <DialogDescription>Selecione a equipe para vincular ao veículo</DialogDescription>
+              <DialogDescription>Selecione a equipe e informe a data de entrada</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
@@ -303,6 +339,16 @@ const Workshop = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="entry_date">Data de Entrada</Label>
+                <Input
+                  id="entry_date"
+                  type="date"
+                  value={formData.entry_date}
+                  onChange={(e) => setFormData({ ...formData, entry_date: e.target.value })}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="reason">Motivo da Entrada</Label>
@@ -330,6 +376,40 @@ const Workshop = () => {
                 </Button>
                 <Button type="submit" disabled={createEntry.isPending || !formData.team_id}>
                   Registrar
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Exit Dialog */}
+        <Dialog open={isExitDialogOpen} onOpenChange={setIsExitDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Registrar Saída da Oficina</DialogTitle>
+              <DialogDescription>
+                {selectedEntry && (
+                  <>Veículo: {selectedEntry.vehicles?.plate} - {selectedEntry.vehicles?.model}</>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleExitSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="exit_date">Data de Saída</Label>
+                <Input
+                  id="exit_date"
+                  type="date"
+                  value={exitDate}
+                  onChange={(e) => setExitDate(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsExitDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={registerExit.isPending || !exitDate}>
+                  Confirmar Saída
                 </Button>
               </div>
             </form>

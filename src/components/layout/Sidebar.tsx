@@ -22,10 +22,8 @@ const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Equipes", url: "/equipes", icon: Users2 },
   { title: "Veículos", url: "/veiculos", icon: Car },
-  { title: "Manutenção", url: "/manutencao", icon: Wrench },
   { title: "Oficina", url: "/oficina", icon: Building },
   { title: "Motoristas", url: "/motoristas", icon: Users },
-  { title: "Ocorrências", url: "/ocorrencias", icon: AlertTriangle },
 ];
 
 export function Sidebar() {
