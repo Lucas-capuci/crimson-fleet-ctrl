@@ -60,14 +60,16 @@ export function DeparturesOverview() {
       
       const profilesMap = new Map(profiles?.map(p => [p.id, p.name]) || []);
       
-      return data.map(d => ({
-        id: d.id,
-        departed: d.departed,
-        departure_time: d.departure_time,
-        no_departure_reason: d.no_departure_reason,
-        teams: d.teams,
-        supervisorName: profilesMap.get(d.supervisor_id) || "-"
-      })) as DepartureRecord[];
+      return data
+        .filter(d => d.teams !== null)
+        .map(d => ({
+          id: d.id,
+          departed: d.departed,
+          departure_time: d.departure_time,
+          no_departure_reason: d.no_departure_reason,
+          teams: d.teams,
+          supervisorName: profilesMap.get(d.supervisor_id) || "-"
+        })) as DepartureRecord[];
     },
   });
 
