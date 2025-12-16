@@ -9,9 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { ChevronLeft, ChevronRight, Check, X, MessageSquare, Calendar } from "lucide-react";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, getDay } from "date-fns";
+import { ChevronLeft, ChevronRight, Check, X, MessageSquare, Calendar, Users, LayoutGrid } from "lucide-react";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
@@ -34,8 +35,7 @@ export default function Schedule() {
   const queryClient = useQueryClient();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedTeamId, setSelectedTeamId] = useState<string>("all");
-  const [editingDay, setEditingDay] = useState<{ teamId: string; date: string } | null>(null);
-  const [observation, setObservation] = useState("");
+  const [activeTab, setActiveTab] = useState<string>("overview");
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -108,21 +108,8 @@ export default function Schedule() {
   const toggleDayStatus = (teamId: string, date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
     const existing = getScheduleForDay(teamId, date);
-    const newStatus = existing ? !existing.is_working : false; // default is working, so toggle to off
+    const newStatus = existing ? !existing.is_working : false;
     scheduleMutation.mutate({ teamId, date: dateStr, isWorking: newStatus });
-  };
-
-  const saveObservation = () => {
-    if (!editingDay) return;
-    const existing = schedules.find(s => s.team_id === editingDay.teamId && s.date === editingDay.date);
-    scheduleMutation.mutate({
-      teamId: editingDay.teamId,
-      date: editingDay.date,
-      isWorking: existing?.is_working ?? true,
-      obs: observation,
-    });
-    setEditingDay(null);
-    setObservation("");
   };
 
   const navigateMonth = (direction: number) => {
@@ -130,6 +117,22 @@ export default function Schedule() {
   };
 
   const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+  // Overview - get stats for today
+  const todayStats = useMemo(() => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    let working = 0;
+    let off = 0;
+    teams.forEach(team => {
+      const schedule = schedules.find(s => s.team_id === team.id && s.date === today);
+      if (schedule?.is_working === false) {
+        off++;
+      } else {
+        working++;
+      }
+    });
+    return { working, off, total: teams.length };
+  }, [teams, schedules]);
 
   return (
     <MainLayout>
@@ -143,23 +146,28 @@ export default function Schedule() {
             </h1>
             <p className="text-sm text-muted-foreground mt-1">Gerencie a escala mensal das equipes</p>
           </div>
+        </div>
 
-          {/* Team Filter */}
-          <div className="w-full sm:w-64">
-            <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Filtrar equipe" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as equipes</SelectItem>
-                {teams.map((team) => (
-                  <SelectItem key={team.id} value={team.id}>
-                    {team.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        {/* Today Stats */}
+        <div className="grid grid-cols-3 gap-3">
+          <Card className="bg-card border-border">
+            <CardContent className="p-3 sm:p-4 text-center">
+              <div className="text-2xl sm:text-3xl font-bold text-foreground">{todayStats.total}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground">Total</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-success/10 border-success/30">
+            <CardContent className="p-3 sm:p-4 text-center">
+              <div className="text-2xl sm:text-3xl font-bold text-success">{todayStats.working}</div>
+              <div className="text-xs sm:text-sm text-success/80">Trabalho</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-destructive/10 border-destructive/30">
+            <CardContent className="p-3 sm:p-4 text-center">
+              <div className="text-2xl sm:text-3xl font-bold text-destructive">{todayStats.off}</div>
+              <div className="text-xs sm:text-sm text-destructive/80">Folga</div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Month Navigation */}
@@ -179,154 +187,324 @@ export default function Schedule() {
           </CardHeader>
         </Card>
 
-        {/* Legend */}
-        <div className="flex flex-wrap gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-emerald-500/20 border border-emerald-500" />
-            <span className="text-muted-foreground">Trabalho</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-red-500/20 border border-red-500" />
-            <span className="text-muted-foreground">Folga</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-primary" />
-            <span className="text-muted-foreground">Com observação</span>
-          </div>
-        </div>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="overview" className="flex items-center gap-2">
+              <LayoutGrid className="h-4 w-4" />
+              <span className="hidden sm:inline">Visão Geral</span>
+              <span className="sm:hidden">Geral</span>
+            </TabsTrigger>
+            <TabsTrigger value="team" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Por Equipe</span>
+              <span className="sm:hidden">Equipe</span>
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Schedule Grid */}
-        {filteredTeams.map((team) => (
-          <Card key={team.id}>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">{team.name}</CardTitle>
-                <Badge variant="secondary" className="text-xs">
-                  {team.type.replace(/_/g, " ")}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {/* Week days header */}
-              <div className="grid grid-cols-7 gap-1 mb-2">
-                {weekDays.map((day) => (
-                  <div key={day} className="text-center text-xs font-medium text-muted-foreground py-1">
-                    {day}
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="mt-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Todas as Equipes</CardTitle>
+                  <div className="flex gap-3 text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-sm bg-success" />
+                      <span className="text-muted-foreground">Trabalho</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-sm bg-destructive" />
+                      <span className="text-muted-foreground">Folga</span>
+                    </div>
                   </div>
-                ))}
-              </div>
-
-              {/* Calendar grid */}
-              <div className="grid grid-cols-7 gap-1">
-                {/* Empty cells for days before month starts */}
-                {Array.from({ length: getDay(monthStart) }).map((_, i) => (
-                  <div key={`empty-${i}`} className="aspect-square" />
-                ))}
-
-                {/* Days of the month */}
-                {daysInMonth.map((day) => {
-                  const schedule = getScheduleForDay(team.id, day);
-                  const isWorking = schedule?.is_working ?? true;
-                  const hasObs = !!schedule?.observation;
-                  const dateStr = format(day, "yyyy-MM-dd");
-
-                  return (
-                    <Popover key={dateStr}>
-                      <PopoverTrigger asChild>
-                        <button
+                </div>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <table className="w-full text-xs sm:text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-2 px-1 sm:px-2 font-medium text-muted-foreground sticky left-0 bg-card min-w-[100px]">
+                        Equipe
+                      </th>
+                      {daysInMonth.map((day) => (
+                        <th
+                          key={format(day, "yyyy-MM-dd")}
                           className={cn(
-                            "aspect-square rounded-lg flex flex-col items-center justify-center text-xs sm:text-sm transition-all relative",
-                            "hover:ring-2 hover:ring-primary/50",
-                            isToday(day) && "ring-2 ring-primary",
-                            isWorking
-                              ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400"
-                              : "bg-red-500/20 text-red-700 dark:text-red-400"
+                            "text-center py-2 px-0.5 sm:px-1 font-medium min-w-[28px] sm:min-w-[32px]",
+                            isToday(day) ? "text-primary" : "text-muted-foreground",
+                            getDay(day) === 0 && "text-destructive/70"
                           )}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            toggleDayStatus(team.id, day);
-                          }}
                         >
-                          <span className="font-medium">{format(day, "d")}</span>
-                          {hasObs && (
-                            <MessageSquare className="h-3 w-3 absolute top-0.5 right-0.5 text-primary" />
-                          )}
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-64 p-3" align="center">
-                        <div className="space-y-3">
-                          <div className="text-sm font-medium">
-                            {format(day, "dd/MM/yyyy")} - {team.name}
+                          <div>{format(day, "d")}</div>
+                          <div className="text-[10px] opacity-60">{weekDays[getDay(day)].charAt(0)}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {teams.map((team) => (
+                      <tr key={team.id} className="border-b border-border/50 hover:bg-muted/30">
+                        <td className="py-1.5 px-1 sm:px-2 font-medium sticky left-0 bg-card">
+                          <div className="truncate max-w-[100px] sm:max-w-[150px]" title={team.name}>
+                            {team.name}
                           </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant={isWorking ? "default" : "outline"}
-                              className="flex-1"
-                              onClick={() => {
-                                if (!isWorking) {
-                                  scheduleMutation.mutate({ teamId: team.id, date: dateStr, isWorking: true, obs: schedule?.observation });
-                                }
-                              }}
-                            >
-                              <Check className="h-4 w-4 mr-1" />
-                              Trabalho
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant={!isWorking ? "destructive" : "outline"}
-                              className="flex-1"
-                              onClick={() => {
-                                if (isWorking) {
-                                  scheduleMutation.mutate({ teamId: team.id, date: dateStr, isWorking: false, obs: schedule?.observation });
-                                }
-                              }}
-                            >
-                              <X className="h-4 w-4 mr-1" />
-                              Folga
-                            </Button>
-                          </div>
-                          <div>
-                            <label className="text-xs text-muted-foreground">Observação (opcional)</label>
-                            <Textarea
-                              placeholder="Adicionar observação..."
-                              className="mt-1 h-20 text-sm"
-                              defaultValue={schedule?.observation || ""}
-                              onBlur={(e) => {
-                                if (e.target.value !== (schedule?.observation || "")) {
-                                  scheduleMutation.mutate({
-                                    teamId: team.id,
-                                    date: dateStr,
-                                    isWorking,
-                                    obs: e.target.value,
-                                  });
-                                }
-                              }}
-                            />
-                          </div>
-                          {schedule?.observation && (
-                            <div className="text-xs bg-muted p-2 rounded">
-                              <span className="font-medium">Obs:</span> {schedule.observation}
-                            </div>
-                          )}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                        </td>
+                        {daysInMonth.map((day) => {
+                          const schedule = getScheduleForDay(team.id, day);
+                          const isWorking = schedule?.is_working ?? true;
+                          const hasObs = !!schedule?.observation;
+                          const dateStr = format(day, "yyyy-MM-dd");
 
-        {filteredTeams.length === 0 && (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              Nenhuma equipe encontrada
-            </CardContent>
-          </Card>
-        )}
+                          return (
+                            <td key={dateStr} className="text-center py-1 px-0.5">
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button
+                                    className={cn(
+                                      "w-6 h-6 sm:w-7 sm:h-7 rounded-md flex items-center justify-center transition-all text-[10px] sm:text-xs font-medium relative",
+                                      "hover:ring-2 hover:ring-ring/50",
+                                      isToday(day) && "ring-1 ring-primary",
+                                      isWorking
+                                        ? "bg-success/20 text-success hover:bg-success/30"
+                                        : "bg-destructive/20 text-destructive hover:bg-destructive/30"
+                                    )}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      toggleDayStatus(team.id, day);
+                                    }}
+                                  >
+                                    {isWorking ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                                    {hasObs && (
+                                      <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+                                    )}
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-64 p-3" align="center">
+                                  <SchedulePopoverContent
+                                    day={day}
+                                    team={team}
+                                    schedule={schedule}
+                                    isWorking={isWorking}
+                                    dateStr={dateStr}
+                                    scheduleMutation={scheduleMutation}
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Team Tab */}
+          <TabsContent value="team" className="mt-4 space-y-4">
+            {/* Team Filter */}
+            <div className="w-full sm:w-64">
+              <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar equipe" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as equipes</SelectItem>
+                  {teams.map((team) => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Legend */}
+            <div className="flex flex-wrap gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-success/20 border-2 border-success" />
+                <span className="text-muted-foreground">Trabalho</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-destructive/20 border-2 border-destructive" />
+                <span className="text-muted-foreground">Folga</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-primary" />
+                <span className="text-muted-foreground">Com observação</span>
+              </div>
+            </div>
+
+            {/* Schedule Grid per Team */}
+            {filteredTeams.map((team) => (
+              <Card key={team.id}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">{team.name}</CardTitle>
+                    <Badge variant="secondary" className="text-xs">
+                      {team.type.replace(/_/g, " ")}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {/* Week days header */}
+                  <div className="grid grid-cols-7 gap-1 mb-2">
+                    {weekDays.map((day, i) => (
+                      <div
+                        key={day}
+                        className={cn(
+                          "text-center text-xs font-medium py-1",
+                          i === 0 ? "text-destructive/70" : "text-muted-foreground"
+                        )}
+                      >
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Calendar grid */}
+                  <div className="grid grid-cols-7 gap-1">
+                    {/* Empty cells for days before month starts */}
+                    {Array.from({ length: getDay(monthStart) }).map((_, i) => (
+                      <div key={`empty-${i}`} className="aspect-square" />
+                    ))}
+
+                    {/* Days of the month */}
+                    {daysInMonth.map((day) => {
+                      const schedule = getScheduleForDay(team.id, day);
+                      const isWorking = schedule?.is_working ?? true;
+                      const hasObs = !!schedule?.observation;
+                      const dateStr = format(day, "yyyy-MM-dd");
+
+                      return (
+                        <Popover key={dateStr}>
+                          <PopoverTrigger asChild>
+                            <button
+                              className={cn(
+                                "aspect-square rounded-lg flex flex-col items-center justify-center text-xs sm:text-sm transition-all relative font-medium",
+                                "hover:ring-2 hover:ring-ring/50",
+                                isToday(day) && "ring-2 ring-primary",
+                                isWorking
+                                  ? "bg-success/15 text-success border border-success/30 hover:bg-success/25"
+                                  : "bg-destructive/15 text-destructive border border-destructive/30 hover:bg-destructive/25"
+                              )}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                toggleDayStatus(team.id, day);
+                              }}
+                            >
+                              <span>{format(day, "d")}</span>
+                              {hasObs && (
+                                <MessageSquare className="h-3 w-3 absolute top-0.5 right-0.5 text-primary" />
+                              )}
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64 p-3" align="center">
+                            <SchedulePopoverContent
+                              day={day}
+                              team={team}
+                              schedule={schedule}
+                              isWorking={isWorking}
+                              dateStr={dateStr}
+                              scheduleMutation={scheduleMutation}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            {filteredTeams.length === 0 && (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  Nenhuma equipe encontrada
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </MainLayout>
+  );
+}
+
+// Extracted popover content component
+function SchedulePopoverContent({
+  day,
+  team,
+  schedule,
+  isWorking,
+  dateStr,
+  scheduleMutation,
+}: {
+  day: Date;
+  team: Team;
+  schedule: ScheduleRecord | undefined;
+  isWorking: boolean;
+  dateStr: string;
+  scheduleMutation: any;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="text-sm font-medium">
+        {format(day, "dd/MM/yyyy")} - {team.name}
+      </div>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          variant={isWorking ? "default" : "outline"}
+          className={cn("flex-1", isWorking && "bg-success hover:bg-success/90")}
+          onClick={() => {
+            if (!isWorking) {
+              scheduleMutation.mutate({ teamId: team.id, date: dateStr, isWorking: true, obs: schedule?.observation });
+            }
+          }}
+        >
+          <Check className="h-4 w-4 mr-1" />
+          Trabalho
+        </Button>
+        <Button
+          size="sm"
+          variant={!isWorking ? "destructive" : "outline"}
+          className="flex-1"
+          onClick={() => {
+            if (isWorking) {
+              scheduleMutation.mutate({ teamId: team.id, date: dateStr, isWorking: false, obs: schedule?.observation });
+            }
+          }}
+        >
+          <X className="h-4 w-4 mr-1" />
+          Folga
+        </Button>
+      </div>
+      <div>
+        <label className="text-xs text-muted-foreground">Observação (opcional)</label>
+        <Textarea
+          placeholder="Adicionar observação..."
+          className="mt-1 h-20 text-sm"
+          defaultValue={schedule?.observation || ""}
+          onBlur={(e) => {
+            if (e.target.value !== (schedule?.observation || "")) {
+              scheduleMutation.mutate({
+                teamId: team.id,
+                date: dateStr,
+                isWorking,
+                obs: e.target.value,
+              });
+            }
+          }}
+        />
+      </div>
+      {schedule?.observation && (
+        <div className="text-xs bg-muted p-2 rounded">
+          <span className="font-medium">Obs:</span> {schedule.observation}
+        </div>
+      )}
+    </div>
   );
 }
