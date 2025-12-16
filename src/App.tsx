@@ -12,6 +12,7 @@ import Drivers from "./pages/Drivers";
 import Teams from "./pages/Teams";
 import Workshop from "./pages/Workshop";
 import Departures from "./pages/Departures";
+import Schedule from "./pages/Schedule";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/veiculos" element={<ProtectedRoute><Vehicles /></ProtectedRoute>} />
             <Route path="/motoristas" element={<ProtectedRoute><Drivers /></ProtectedRoute>} />
             <Route path="/equipes" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
+            <Route path="/escala" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
             <Route path="/saida" element={<ProtectedRoute><Departures /></ProtectedRoute>} />
             <Route path="/oficina" element={<ProtectedRoute><Workshop /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
