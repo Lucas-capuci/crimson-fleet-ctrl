@@ -258,39 +258,71 @@ export default function Schedule() {
 
                           return (
                             <td key={dateStr} className="text-center py-1 px-0.5">
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <button
-                                    className={cn(
-                                      "w-6 h-6 sm:w-7 sm:h-7 rounded-md flex items-center justify-center transition-all text-[10px] sm:text-xs font-medium relative",
-                                      "hover:ring-2 hover:ring-ring/50",
-                                      isToday(day) && "ring-1 ring-primary",
-                                      isWorking
-                                        ? "bg-success/20 text-success hover:bg-success/30"
-                                        : "bg-destructive/20 text-destructive hover:bg-destructive/30"
-                                    )}
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      toggleDayStatus(team.id, day);
-                                    }}
-                                  >
-                                    {isWorking ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                                    {hasObs && (
-                                      <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
-                                    )}
-                                  </button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-64 p-3" align="center">
-                                  <SchedulePopoverContent
-                                    day={day}
-                                    team={team}
-                                    schedule={schedule}
-                                    isWorking={isWorking}
-                                    dateStr={dateStr}
-                                    scheduleMutation={scheduleMutation}
-                                  />
-                                </PopoverContent>
-                              </Popover>
+                              {isAdmin ? (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button
+                                      className={cn(
+                                        "w-6 h-6 sm:w-7 sm:h-7 rounded-md flex items-center justify-center transition-all text-[10px] sm:text-xs font-medium relative",
+                                        "hover:ring-2 hover:ring-ring/50",
+                                        isToday(day) && "ring-1 ring-primary",
+                                        isWorking
+                                          ? "bg-success/20 text-success hover:bg-success/30"
+                                          : "bg-destructive/20 text-destructive hover:bg-destructive/30"
+                                      )}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        toggleDayStatus(team.id, day);
+                                      }}
+                                    >
+                                      {isWorking ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                                      {hasObs && (
+                                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+                                      )}
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-64 p-3" align="center">
+                                    <SchedulePopoverContent
+                                      day={day}
+                                      team={team}
+                                      schedule={schedule}
+                                      isWorking={isWorking}
+                                      dateStr={dateStr}
+                                      scheduleMutation={scheduleMutation}
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              ) : (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <div
+                                      className={cn(
+                                        "w-6 h-6 sm:w-7 sm:h-7 rounded-md flex items-center justify-center text-[10px] sm:text-xs font-medium relative cursor-default",
+                                        isToday(day) && "ring-1 ring-primary",
+                                        isWorking
+                                          ? "bg-success/20 text-success"
+                                          : "bg-destructive/20 text-destructive"
+                                      )}
+                                    >
+                                      {isWorking ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                                      {hasObs && (
+                                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+                                      )}
+                                    </div>
+                                  </PopoverTrigger>
+                                  {hasObs && (
+                                    <PopoverContent className="w-64 p-3" align="center">
+                                      <div className="text-sm">
+                                        <div className="font-medium mb-1">{team.name}</div>
+                                        <div className="text-xs text-muted-foreground mb-2">
+                                          {format(day, "dd/MM/yyyy")}
+                                        </div>
+                                        <div className="text-xs bg-muted p-2 rounded">{schedule?.observation}</div>
+                                      </div>
+                                    </PopoverContent>
+                                  )}
+                                </Popover>
+                              )}
                             </td>
                           );
                         })}
@@ -378,7 +410,7 @@ export default function Schedule() {
                       const hasObs = !!schedule?.observation;
                       const dateStr = format(day, "yyyy-MM-dd");
 
-                      return (
+                      return isAdmin ? (
                         <Popover key={dateStr}>
                           <PopoverTrigger asChild>
                             <button
@@ -411,6 +443,36 @@ export default function Schedule() {
                               scheduleMutation={scheduleMutation}
                             />
                           </PopoverContent>
+                        </Popover>
+                      ) : (
+                        <Popover key={dateStr}>
+                          <PopoverTrigger asChild>
+                            <div
+                              className={cn(
+                                "aspect-square rounded-lg flex flex-col items-center justify-center text-xs sm:text-sm relative font-medium cursor-default",
+                                isToday(day) && "ring-2 ring-primary",
+                                isWorking
+                                  ? "bg-success/15 text-success border border-success/30"
+                                  : "bg-destructive/15 text-destructive border border-destructive/30"
+                              )}
+                            >
+                              <span>{format(day, "d")}</span>
+                              {hasObs && (
+                                <MessageSquare className="h-3 w-3 absolute top-0.5 right-0.5 text-primary" />
+                              )}
+                            </div>
+                          </PopoverTrigger>
+                          {hasObs && (
+                            <PopoverContent className="w-64 p-3" align="center">
+                              <div className="text-sm">
+                                <div className="font-medium mb-1">{team.name}</div>
+                                <div className="text-xs text-muted-foreground mb-2">
+                                  {format(day, "dd/MM/yyyy")}
+                                </div>
+                                <div className="text-xs bg-muted p-2 rounded">{schedule?.observation}</div>
+                              </div>
+                            </PopoverContent>
+                          )}
                         </Popover>
                       );
                     })}
