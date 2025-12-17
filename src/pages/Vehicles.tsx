@@ -372,7 +372,7 @@ const Vehicles = () => {
           </TableHeader>
           <TableBody>
             {filteredVehicles.map((vehicle) => {
-              const status = statusConfig[vehicle.status];
+              const status = statusConfig[vehicle.status] || { label: vehicle.status, className: "bg-gray-500/20 text-gray-700" };
               return (
                 <TableRow key={vehicle.id} className="hover:bg-muted/30">
                   <TableCell className="font-medium">
