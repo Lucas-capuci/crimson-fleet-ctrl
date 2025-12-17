@@ -47,6 +47,7 @@ const TEAM_TYPES = [
   { value: "linha_morta", label: "Linha Morta" },
   { value: "poda", label: "Poda" },
   { value: "linha_morta_obras", label: "Linha Morta Obras" },
+  { value: "recolha", label: "Recolha" },
 ];
 
 export default function Schedule() {

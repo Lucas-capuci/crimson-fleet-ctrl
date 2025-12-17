@@ -511,7 +511,12 @@ export type Database = {
       incident_severity: "baixa" | "media" | "alta" | "critica"
       incident_type: "multa" | "acidente" | "incidente" | "observacao"
       maintenance_status: "pendente" | "em_andamento" | "concluida"
-      team_type: "linha_viva" | "linha_morta" | "poda" | "linha_morta_obras"
+      team_type:
+        | "linha_viva"
+        | "linha_morta"
+        | "poda"
+        | "linha_morta_obras"
+        | "recolha"
       vehicle_status:
         | "ativo"
         | "manutencao"
@@ -649,7 +654,13 @@ export const Constants = {
       incident_severity: ["baixa", "media", "alta", "critica"],
       incident_type: ["multa", "acidente", "incidente", "observacao"],
       maintenance_status: ["pendente", "em_andamento", "concluida"],
-      team_type: ["linha_viva", "linha_morta", "poda", "linha_morta_obras"],
+      team_type: [
+        "linha_viva",
+        "linha_morta",
+        "poda",
+        "linha_morta_obras",
+        "recolha",
+      ],
       vehicle_status: [
         "ativo",
         "manutencao",
