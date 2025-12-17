@@ -15,7 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Play, Check, X, ChevronLeft, ChevronRight, Calendar, Clock, Users } from "lucide-react";
+import { Play, Check, X, ChevronLeft, ChevronRight, Calendar, Clock, Users, Pencil } from "lucide-react";
 
 interface Team {
   id: string;
@@ -56,6 +56,14 @@ const Departures = () => {
   // Admin filter state
   const [filterDate, setFilterDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [filterSupervisor, setFilterSupervisor] = useState<string>("all");
+  
+  // Admin edit state
+  const [editingDeparture, setEditingDeparture] = useState<Departure | null>(null);
+  const [editForm, setEditForm] = useState<DepartureFormData>({
+    departed: true,
+    departure_time: "07:00",
+    no_departure_reason: "",
+  });
 
   // Fetch teams for supervisor wizard
   const { data: teams = [] } = useQuery({
@@ -177,6 +185,29 @@ const Departures = () => {
     },
   });
 
+  // Admin edit mutation
+  const updateDeparture = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: DepartureFormData }) => {
+      const { error } = await supabase
+        .from("departures")
+        .update({
+          departed: data.departed,
+          departure_time: data.departed ? data.departure_time : null,
+          no_departure_reason: !data.departed ? data.no_departure_reason : null,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["departures"] });
+      toast({ title: "Saída atualizada com sucesso!" });
+      setEditingDeparture(null);
+    },
+    onError: (error) => {
+      toast({ title: "Erro ao atualizar", description: String(error), variant: "destructive" });
+    },
+  });
+
   // Initialize wizard with existing data
   const startWizard = () => {
     const initialData: Record<string, DepartureFormData> = {};
@@ -191,6 +222,21 @@ const Departures = () => {
     setWizardData(initialData);
     setCurrentTeamIndex(0);
     setIsWizardOpen(true);
+  };
+
+  // Start editing a departure
+  const startEditing = (dep: Departure) => {
+    setEditingDeparture(dep);
+    setEditForm({
+      departed: dep.departed,
+      departure_time: dep.departure_time || "07:00",
+      no_departure_reason: dep.no_departure_reason || "",
+    });
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingDeparture) return;
+    updateDeparture.mutate({ id: editingDeparture.id, data: editForm });
   };
 
   const currentTeam = teams[currentTeamIndex];
@@ -225,14 +271,13 @@ const Departures = () => {
   };
 
   const totalTeams = teams.length;
-  const completedCount = Object.keys(wizardData).length;
 
   return (
     <MainLayout>
       <div className="mb-6 animate-fade-in">
         <h1 className="text-3xl font-bold text-foreground mb-2">Controle de Saída</h1>
         <p className="text-muted-foreground">
-          {isAdmin ? "Visualize os lançamentos por supervisor e data" : "Lance a saída das equipes por dia"}
+          {isAdmin ? "Visualize e edite os lançamentos por supervisor e data" : "Lance a saída das equipes por dia"}
         </p>
       </div>
 
@@ -323,6 +368,7 @@ const Departures = () => {
                   {isAdmin && <TableHead>Supervisor</TableHead>}
                   <TableHead>Status</TableHead>
                   <TableHead>Horário/Motivo</TableHead>
+                  {isAdmin && <TableHead className="w-16">Ações</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -354,6 +400,17 @@ const Departures = () => {
                         <span className="text-muted-foreground">{dep.no_departure_reason || "-"}</span>
                       )}
                     </TableCell>
+                    {isAdmin && (
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => startEditing(dep)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -361,6 +418,95 @@ const Departures = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Admin Edit Dialog */}
+      <Dialog open={!!editingDeparture} onOpenChange={(open) => !open && setEditingDeparture(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Saída</DialogTitle>
+          </DialogHeader>
+
+          {editingDeparture && (
+            <div className="space-y-6">
+              {/* Team Info */}
+              <div className="bg-muted/50 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <Users className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">{editingDeparture.teams?.name}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {editingDeparture.teams?.type} • {format(new Date(editingDeparture.date + "T12:00:00"), "dd/MM/yyyy")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Selection */}
+              <div className="text-center">
+                <p className="text-lg mb-4">Status da saída</p>
+                <div className="flex gap-3 justify-center">
+                  <Button
+                    size="lg"
+                    variant={editForm.departed ? "default" : "outline"}
+                    onClick={() => setEditForm(prev => ({ ...prev, departed: true }))}
+                    className="w-32"
+                  >
+                    <Check className="h-5 w-5 mr-2" />
+                    Saiu
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant={!editForm.departed ? "destructive" : "outline"}
+                    onClick={() => setEditForm(prev => ({ ...prev, departed: false }))}
+                    className="w-32"
+                  >
+                    <X className="h-5 w-5 mr-2" />
+                    Não Saiu
+                  </Button>
+                </div>
+              </div>
+
+              {/* Conditional Fields */}
+              {editForm.departed ? (
+                <div>
+                  <Label htmlFor="edit-departure-time">Horário de Saída</Label>
+                  <Input
+                    id="edit-departure-time"
+                    type="time"
+                    value={editForm.departure_time}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, departure_time: e.target.value }))}
+                    className="w-full mt-1"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <Label htmlFor="edit-no-departure-reason">Motivo</Label>
+                  <Textarea
+                    id="edit-no-departure-reason"
+                    value={editForm.no_departure_reason}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, no_departure_reason: e.target.value }))}
+                    placeholder="Informe o motivo da não saída..."
+                    className="mt-1"
+                    rows={3}
+                  />
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 justify-end pt-4 border-t">
+                <Button variant="outline" onClick={() => setEditingDeparture(null)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleSaveEdit} disabled={updateDeparture.isPending}>
+                  {updateDeparture.isPending ? "Salvando..." : "Salvar"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Wizard Dialog */}
       <Dialog open={isWizardOpen} onOpenChange={setIsWizardOpen}>

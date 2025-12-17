@@ -10,8 +10,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { ChevronLeft, ChevronRight, Check, X, MessageSquare, Calendar, Users, LayoutGrid } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, X, MessageSquare, Calendar, Users, LayoutGrid, Filter } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -30,11 +31,31 @@ type Team = {
   type: string;
 };
 
+type SupervisorTeam = {
+  supervisor_id: string;
+  team_id: string;
+};
+
+type Profile = {
+  id: string;
+  name: string;
+};
+
+const TEAM_TYPES = [
+  { value: "all", label: "Todos os tipos" },
+  { value: "linha_viva", label: "Linha Viva" },
+  { value: "linha_morta", label: "Linha Morta" },
+  { value: "poda", label: "Poda" },
+  { value: "linha_morta_obras", label: "Linha Morta Obras" },
+];
+
 export default function Schedule() {
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedTeamId, setSelectedTeamId] = useState<string>("all");
+  const [selectedSupervisor, setSelectedSupervisor] = useState<string>("all");
+  const [selectedTeamType, setSelectedTeamType] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<string>("overview");
 
   const monthStart = startOfMonth(currentDate);
@@ -53,6 +74,46 @@ export default function Schedule() {
       return data as Team[];
     },
   });
+
+  // Fetch supervisor-team relationships
+  const { data: supervisorTeams = [] } = useQuery({
+    queryKey: ["supervisor-teams-schedule"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("supervisor_teams")
+        .select("supervisor_id, team_id");
+      if (error) throw error;
+      return data as SupervisorTeam[];
+    },
+  });
+
+  // Fetch profiles for supervisors
+  const { data: profiles = [] } = useQuery({
+    queryKey: ["profiles-schedule"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data as Profile[];
+    },
+  });
+
+  // Get unique supervisors from supervisor_teams
+  const supervisors = useMemo(() => {
+    const profileMap = new Map(profiles.map(p => [p.id, p.name]));
+    const uniqueSupervisors = new Map<string, string>();
+    supervisorTeams.forEach(st => {
+      const name = profileMap.get(st.supervisor_id);
+      if (name && !uniqueSupervisors.has(st.supervisor_id)) {
+        uniqueSupervisors.set(st.supervisor_id, name);
+      }
+    });
+    return Array.from(uniqueSupervisors, ([id, name]) => ({ id, name })).sort((a, b) => 
+      a.name.localeCompare(b.name)
+    );
+  }, [supervisorTeams, profiles]);
 
   // Fetch schedules for the month
   const { data: schedules = [] } = useQuery({
@@ -95,10 +156,30 @@ export default function Schedule() {
     },
   });
 
+  // Filter teams based on all filters
   const filteredTeams = useMemo(() => {
-    if (selectedTeamId === "all") return teams;
-    return teams.filter(t => t.id === selectedTeamId);
-  }, [teams, selectedTeamId]);
+    let result = teams;
+
+    // Filter by team type
+    if (selectedTeamType !== "all") {
+      result = result.filter(t => t.type === selectedTeamType);
+    }
+
+    // Filter by supervisor
+    if (selectedSupervisor !== "all") {
+      const teamIdsForSupervisor = supervisorTeams
+        .filter(st => st.supervisor_id === selectedSupervisor)
+        .map(st => st.team_id);
+      result = result.filter(t => teamIdsForSupervisor.includes(t.id));
+    }
+
+    // Filter by specific team (in team tab)
+    if (selectedTeamId !== "all") {
+      result = result.filter(t => t.id === selectedTeamId);
+    }
+
+    return result;
+  }, [teams, selectedTeamType, selectedSupervisor, selectedTeamId, supervisorTeams]);
 
   const getScheduleForDay = (teamId: string, date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
@@ -123,7 +204,7 @@ export default function Schedule() {
     const today = format(new Date(), "yyyy-MM-dd");
     let working = 0;
     let off = 0;
-    teams.forEach(team => {
+    filteredTeams.forEach(team => {
       const schedule = schedules.find(s => s.team_id === team.id && s.date === today);
       if (schedule?.is_working === false) {
         off++;
@@ -131,8 +212,16 @@ export default function Schedule() {
         working++;
       }
     });
-    return { working, off, total: teams.length };
-  }, [teams, schedules]);
+    return { working, off, total: filteredTeams.length };
+  }, [filteredTeams, schedules]);
+
+  // Get supervisor name for a team
+  const getSupervisorForTeam = (teamId: string) => {
+    const st = supervisorTeams.find(s => s.team_id === teamId);
+    if (!st) return "-";
+    const profile = profiles.find(p => p.id === st.supervisor_id);
+    return profile?.name || "-";
+  };
 
   return (
     <MainLayout>
@@ -147,6 +236,63 @@ export default function Schedule() {
             <p className="text-sm text-muted-foreground mt-1">Gerencie a escala mensal das equipes</p>
           </div>
         </div>
+
+        {/* Filters */}
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Filtros</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <Label className="text-xs text-muted-foreground">Supervisor</Label>
+                <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Todos os supervisores" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os supervisores</SelectItem>
+                    {supervisors.map((sup) => (
+                      <SelectItem key={sup.id} value={sup.id}>
+                        {sup.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Tipo de Equipe</Label>
+                <Select value={selectedTeamType} onValueChange={setSelectedTeamType}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Todos os tipos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TEAM_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {(selectedSupervisor !== "all" || selectedTeamType !== "all") && (
+                <div className="flex items-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedSupervisor("all");
+                      setSelectedTeamType("all");
+                    }}
+                  >
+                    Limpar Filtros
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Today Stats */}
         <div className="grid grid-cols-3 gap-3">
@@ -207,7 +353,11 @@ export default function Schedule() {
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Todas as Equipes</CardTitle>
+                  <CardTitle className="text-base">
+                    {filteredTeams.length === teams.length 
+                      ? "Todas as Equipes" 
+                      : `${filteredTeams.length} Equipe${filteredTeams.length !== 1 ? 's' : ''}`}
+                  </CardTitle>
                   <div className="flex gap-3 text-xs">
                     <div className="flex items-center gap-1.5">
                       <div className="w-3 h-3 rounded-sm bg-success" />
@@ -221,115 +371,119 @@ export default function Schedule() {
                 </div>
               </CardHeader>
               <CardContent className="overflow-x-auto">
-                <table className="w-full text-xs sm:text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-2 px-1 sm:px-2 font-medium text-muted-foreground sticky left-0 bg-card min-w-[100px]">
-                        Equipe
-                      </th>
-                      {daysInMonth.map((day) => (
-                        <th
-                          key={format(day, "yyyy-MM-dd")}
-                          className={cn(
-                            "text-center py-2 px-0.5 sm:px-1 font-medium min-w-[28px] sm:min-w-[32px]",
-                            isToday(day) ? "text-primary" : "text-muted-foreground",
-                            getDay(day) === 0 && "text-destructive/70"
-                          )}
-                        >
-                          <div>{format(day, "d")}</div>
-                          <div className="text-[10px] opacity-60">{weekDays[getDay(day)].charAt(0)}</div>
+                {filteredTeams.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">Nenhuma equipe encontrada com os filtros selecionados.</p>
+                ) : (
+                  <table className="w-full text-xs sm:text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-2 px-1 sm:px-2 font-medium text-muted-foreground sticky left-0 bg-card min-w-[100px]">
+                          Equipe
                         </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {teams.map((team) => (
-                      <tr key={team.id} className="border-b border-border/50 hover:bg-muted/30">
-                        <td className="py-1.5 px-1 sm:px-2 font-medium sticky left-0 bg-card">
-                          <div className="truncate max-w-[100px] sm:max-w-[150px]" title={team.name}>
-                            {team.name}
-                          </div>
-                        </td>
-                        {daysInMonth.map((day) => {
-                          const schedule = getScheduleForDay(team.id, day);
-                          const isWorking = schedule?.is_working ?? true;
-                          const hasObs = !!schedule?.observation;
-                          const dateStr = format(day, "yyyy-MM-dd");
-
-                          return (
-                            <td key={dateStr} className="text-center py-1 px-0.5">
-                              {isAdmin ? (
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <button
-                                      className={cn(
-                                        "w-6 h-6 sm:w-7 sm:h-7 rounded-md flex items-center justify-center transition-all text-[10px] sm:text-xs font-medium relative",
-                                        "hover:ring-2 hover:ring-ring/50",
-                                        isToday(day) && "ring-1 ring-primary",
-                                        isWorking
-                                          ? "bg-success/20 text-success hover:bg-success/30"
-                                          : "bg-destructive/20 text-destructive hover:bg-destructive/30"
-                                      )}
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        toggleDayStatus(team.id, day);
-                                      }}
-                                    >
-                                      {isWorking ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                                      {hasObs && (
-                                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
-                                      )}
-                                    </button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-64 p-3" align="center">
-                                    <SchedulePopoverContent
-                                      day={day}
-                                      team={team}
-                                      schedule={schedule}
-                                      isWorking={isWorking}
-                                      dateStr={dateStr}
-                                      scheduleMutation={scheduleMutation}
-                                    />
-                                  </PopoverContent>
-                                </Popover>
-                              ) : (
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <div
-                                      className={cn(
-                                        "w-6 h-6 sm:w-7 sm:h-7 rounded-md flex items-center justify-center text-[10px] sm:text-xs font-medium relative cursor-default",
-                                        isToday(day) && "ring-1 ring-primary",
-                                        isWorking
-                                          ? "bg-success/20 text-success"
-                                          : "bg-destructive/20 text-destructive"
-                                      )}
-                                    >
-                                      {isWorking ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                                      {hasObs && (
-                                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
-                                      )}
-                                    </div>
-                                  </PopoverTrigger>
-                                  {hasObs && (
-                                    <PopoverContent className="w-64 p-3" align="center">
-                                      <div className="text-sm">
-                                        <div className="font-medium mb-1">{team.name}</div>
-                                        <div className="text-xs text-muted-foreground mb-2">
-                                          {format(day, "dd/MM/yyyy")}
-                                        </div>
-                                        <div className="text-xs bg-muted p-2 rounded">{schedule?.observation}</div>
-                                      </div>
-                                    </PopoverContent>
-                                  )}
-                                </Popover>
-                              )}
-                            </td>
-                          );
-                        })}
+                        {daysInMonth.map((day) => (
+                          <th
+                            key={format(day, "yyyy-MM-dd")}
+                            className={cn(
+                              "text-center py-2 px-0.5 sm:px-1 font-medium min-w-[28px] sm:min-w-[32px]",
+                              isToday(day) ? "text-primary" : "text-muted-foreground",
+                              getDay(day) === 0 && "text-destructive/70"
+                            )}
+                          >
+                            <div>{format(day, "d")}</div>
+                            <div className="text-[10px] opacity-60">{weekDays[getDay(day)].charAt(0)}</div>
+                          </th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {filteredTeams.map((team) => (
+                        <tr key={team.id} className="border-b border-border/50 hover:bg-muted/30">
+                          <td className="py-1.5 px-1 sm:px-2 font-medium sticky left-0 bg-card">
+                            <div className="truncate max-w-[100px] sm:max-w-[150px]" title={team.name}>
+                              {team.name}
+                            </div>
+                          </td>
+                          {daysInMonth.map((day) => {
+                            const schedule = getScheduleForDay(team.id, day);
+                            const isWorking = schedule?.is_working ?? true;
+                            const hasObs = !!schedule?.observation;
+                            const dateStr = format(day, "yyyy-MM-dd");
+
+                            return (
+                              <td key={dateStr} className="text-center py-1 px-0.5">
+                                {isAdmin ? (
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <button
+                                        className={cn(
+                                          "w-6 h-6 sm:w-7 sm:h-7 rounded-md flex items-center justify-center transition-all text-[10px] sm:text-xs font-medium relative",
+                                          "hover:ring-2 hover:ring-ring/50",
+                                          isToday(day) && "ring-1 ring-primary",
+                                          isWorking
+                                            ? "bg-success/20 text-success hover:bg-success/30"
+                                            : "bg-destructive/20 text-destructive hover:bg-destructive/30"
+                                        )}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          toggleDayStatus(team.id, day);
+                                        }}
+                                      >
+                                        {isWorking ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                                        {hasObs && (
+                                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+                                        )}
+                                      </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 p-3" align="center">
+                                      <SchedulePopoverContent
+                                        day={day}
+                                        team={team}
+                                        schedule={schedule}
+                                        isWorking={isWorking}
+                                        dateStr={dateStr}
+                                        scheduleMutation={scheduleMutation}
+                                      />
+                                    </PopoverContent>
+                                  </Popover>
+                                ) : (
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <div
+                                        className={cn(
+                                          "w-6 h-6 sm:w-7 sm:h-7 rounded-md flex items-center justify-center text-[10px] sm:text-xs font-medium relative cursor-default",
+                                          isToday(day) && "ring-1 ring-primary",
+                                          isWorking
+                                            ? "bg-success/20 text-success"
+                                            : "bg-destructive/20 text-destructive"
+                                        )}
+                                      >
+                                        {isWorking ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                                        {hasObs && (
+                                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+                                        )}
+                                      </div>
+                                    </PopoverTrigger>
+                                    {hasObs && (
+                                      <PopoverContent className="w-64 p-3" align="center">
+                                        <div className="text-sm">
+                                          <div className="font-medium mb-1">{team.name}</div>
+                                          <div className="text-xs text-muted-foreground mb-2">
+                                            {format(day, "dd/MM/yyyy")}
+                                          </div>
+                                          <div className="text-xs bg-muted p-2 rounded">{schedule?.observation}</div>
+                                        </div>
+                                      </PopoverContent>
+                                    )}
+                                  </Popover>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -344,11 +498,23 @@ export default function Schedule() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas as equipes</SelectItem>
-                  {teams.map((team) => (
-                    <SelectItem key={team.id} value={team.id}>
-                      {team.name}
-                    </SelectItem>
-                  ))}
+                  {teams
+                    .filter(team => {
+                      // Apply supervisor and type filters
+                      if (selectedTeamType !== "all" && team.type !== selectedTeamType) return false;
+                      if (selectedSupervisor !== "all") {
+                        const teamIdsForSupervisor = supervisorTeams
+                          .filter(st => st.supervisor_id === selectedSupervisor)
+                          .map(st => st.team_id);
+                        if (!teamIdsForSupervisor.includes(team.id)) return false;
+                      }
+                      return true;
+                    })
+                    .map((team) => (
+                      <SelectItem key={team.id} value={team.id}>
+                        {team.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -374,7 +540,12 @@ export default function Schedule() {
               <Card key={team.id}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">{team.name}</CardTitle>
+                    <div>
+                      <CardTitle className="text-base">{team.name}</CardTitle>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Supervisor: {getSupervisorForTeam(team.id)}
+                      </p>
+                    </div>
                     <Badge variant="secondary" className="text-xs">
                       {team.type.replace(/_/g, " ")}
                     </Badge>
@@ -484,7 +655,7 @@ export default function Schedule() {
             {filteredTeams.length === 0 && (
               <Card>
                 <CardContent className="py-8 text-center text-muted-foreground">
-                  Nenhuma equipe encontrada
+                  Nenhuma equipe encontrada com os filtros selecionados
                 </CardContent>
               </Card>
             )}
