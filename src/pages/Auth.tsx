@@ -46,9 +46,9 @@ const Auth = () => {
 
     setIsLoading(true);
     
-    // First, find the email associated with the username using RPC
+    // First, find the email associated with the username using RPC (case-insensitive)
     const { data: email, error: emailError } = await supabase
-      .rpc("get_email_by_username", { _username: loginForm.username });
+      .rpc("get_email_by_username", { _username: loginForm.username.toLowerCase() });
     
     if (emailError || !email) {
       setIsLoading(false);
