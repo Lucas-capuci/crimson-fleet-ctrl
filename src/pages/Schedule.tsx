@@ -380,19 +380,24 @@ export default function Schedule() {
                         <th className="text-left py-2 px-1 sm:px-2 font-medium text-muted-foreground sticky left-0 bg-card min-w-[100px]">
                           Equipe
                         </th>
-                        {daysInMonth.map((day) => (
-                          <th
-                            key={format(day, "yyyy-MM-dd")}
-                            className={cn(
-                              "text-center py-2 px-0.5 sm:px-1 font-medium min-w-[28px] sm:min-w-[32px]",
-                              isToday(day) ? "text-primary" : "text-muted-foreground",
-                              getDay(day) === 0 && "text-destructive/70"
-                            )}
-                          >
-                            <div>{format(day, "d")}</div>
-                            <div className="text-[10px] opacity-60">{weekDays[getDay(day)].charAt(0)}</div>
-                          </th>
-                        ))}
+                        {daysInMonth.map((day, index) => {
+                          const dayOfWeek = getDay(day);
+                          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                          return (
+                            <th
+                              key={format(day, "yyyy-MM-dd")}
+                              className={cn(
+                                "text-center py-2 px-0.5 sm:px-1 font-medium min-w-[28px] sm:min-w-[32px] border-r border-border/30",
+                                isToday(day) ? "text-primary" : "text-muted-foreground",
+                                isWeekend && "bg-muted/50 text-muted-foreground font-semibold",
+                                dayOfWeek === 0 && "text-destructive/70"
+                              )}
+                            >
+                              <div>{format(day, "d")}</div>
+                              <div className="text-[10px] opacity-60">{weekDays[dayOfWeek].charAt(0)}</div>
+                            </th>
+                          );
+                        })}
                       </tr>
                     </thead>
                     <tbody>
@@ -408,9 +413,17 @@ export default function Schedule() {
                             const isWorking = schedule?.is_working ?? true;
                             const hasObs = !!schedule?.observation;
                             const dateStr = format(day, "yyyy-MM-dd");
+                            const dayOfWeek = getDay(day);
+                            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
                             return (
-                              <td key={dateStr} className="text-center py-1 px-0.5">
+                              <td 
+                                key={dateStr} 
+                                className={cn(
+                                  "text-center py-1 px-0.5 border-r border-border/30",
+                                  isWeekend && "bg-muted/50"
+                                )}
+                              >
                                 {isAdmin ? (
                                   <Popover>
                                     <PopoverTrigger asChild>
