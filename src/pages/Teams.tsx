@@ -33,7 +33,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-type TeamType = "linha_viva" | "linha_morta" | "poda" | "linha_morta_obras";
+type TeamType = "linha_viva" | "linha_morta" | "poda" | "linha_morta_obras" | "recolha";
 
 interface Team {
   id: string;
@@ -62,6 +62,7 @@ const teamTypeLabels: Record<TeamType, string> = {
   linha_morta: "Linha Morta",
   poda: "Poda",
   linha_morta_obras: "Linha Morta Obras",
+  recolha: "Recolha",
 };
 
 const Teams = () => {
@@ -328,6 +329,7 @@ const Teams = () => {
             <SelectItem value="linha_morta">Linha Morta</SelectItem>
             <SelectItem value="poda">Poda</SelectItem>
             <SelectItem value="linha_morta_obras">Linha Morta Obras</SelectItem>
+            <SelectItem value="recolha">Recolha</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterBasket} onValueChange={setFilterBasket}>
@@ -381,6 +383,7 @@ const Teams = () => {
                         <SelectItem value="linha_morta">Linha Morta</SelectItem>
                         <SelectItem value="poda">Poda</SelectItem>
                         <SelectItem value="linha_morta_obras">Linha Morta Obras</SelectItem>
+                        <SelectItem value="recolha">Recolha</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

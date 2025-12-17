@@ -12,6 +12,7 @@ const teamTypeLabels: Record<string, string> = {
   linha_morta: "Linha Morta",
   poda: "Poda",
   linha_morta_obras: "LM Obras",
+  recolha: "Recolha",
 };
 
 interface DepartureRecord {
