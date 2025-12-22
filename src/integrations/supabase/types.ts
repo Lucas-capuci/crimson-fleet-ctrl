@@ -647,6 +647,7 @@ export type Database = {
         | "poda"
         | "linha_morta_obras"
         | "recolha"
+        | "linha_viva_obras"
       vehicle_status:
         | "ativo"
         | "manutencao"
@@ -791,6 +792,7 @@ export const Constants = {
         "poda",
         "linha_morta_obras",
         "recolha",
+        "linha_viva_obras",
       ],
       vehicle_status: [
         "ativo",

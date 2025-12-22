@@ -18,6 +18,7 @@ const teamTypeLabels: Record<string, string> = {
   linha_morta: "Linha Morta",
   poda: "Poda",
   linha_morta_obras: "LM Obras",
+  linha_viva_obras: "LV Obras",
   recolha: "Recolha",
 };
 
@@ -226,9 +227,9 @@ export function DeparturesOverview() {
     const dateFormatted = format(new Date(day.date + "T12:00:00"), "dd/MM/yyyy").toUpperCase();
     const teamTypeStats = getTeamTypeStats(day.departures);
     
-    // Group by category (OBRAS = linha_morta_obras, MANUTENÇÃO = linha_morta + linha_viva, PODA, RECOLHA)
+    // Group by category (OBRAS = linha_morta_obras + linha_viva_obras, MANUTENÇÃO = linha_morta + linha_viva, PODA, RECOLHA)
     const obrasLinhaMorta = teamTypeStats.find(s => s.type === "linha_morta_obras");
-    const obrasLinhaViva = day.departures.filter(d => d.teams?.type === "linha_viva" && d.teams?.name?.includes("OBRAS"));
+    const obrasLinhaViva = teamTypeStats.find(s => s.type === "linha_viva_obras");
     
     const manutLinhaMorta = teamTypeStats.find(s => s.type === "linha_morta");
     const manutLinhaViva = teamTypeStats.find(s => s.type === "linha_viva");
@@ -246,12 +247,23 @@ export function DeparturesOverview() {
     
     let report = `*ABERTURA DE TURNOS ${dateFormatted}*\n\n`;
     
-    // OBRAS section (linha_morta_obras)
-    if (obrasLinhaMorta && obrasLinhaMorta.total > 0) {
+    // OBRAS section (linha_morta_obras + linha_viva_obras)
+    const hasObras = (obrasLinhaMorta && obrasLinhaMorta.total > 0) || (obrasLinhaViva && obrasLinhaViva.total > 0);
+    if (hasObras) {
       report += `OBRAS\n\n`;
-      report += `${getEmoji(obrasLinhaMorta.percentage)}LINHA MORTA - ${obrasLinhaMorta.departed.toString().padStart(2, "0")}/${obrasLinhaMorta.total.toString().padStart(2, "0")} - ${obrasLinhaMorta.percentage}%\n`;
-      const obrasDetails = getTeamDetails(day.departures, "linha_morta_obras");
-      if (obrasDetails) report += `${obrasDetails}\n`;
+      
+      if (obrasLinhaMorta && obrasLinhaMorta.total > 0) {
+        report += `${getEmoji(obrasLinhaMorta.percentage)}LINHA MORTA - ${obrasLinhaMorta.departed.toString().padStart(2, "0")}/${obrasLinhaMorta.total.toString().padStart(2, "0")} - ${obrasLinhaMorta.percentage}%\n`;
+        const lmObrasDetails = getTeamDetails(day.departures, "linha_morta_obras");
+        if (lmObrasDetails) report += `${lmObrasDetails}\n`;
+      }
+      
+      if (obrasLinhaViva && obrasLinhaViva.total > 0) {
+        report += `${getEmoji(obrasLinhaViva.percentage)}LINHA VIVA - ${obrasLinhaViva.departed.toString().padStart(2, "0")}/${obrasLinhaViva.total.toString().padStart(2, "0")} - ${obrasLinhaViva.percentage}%\n`;
+        const lvObrasDetails = getTeamDetails(day.departures, "linha_viva_obras");
+        if (lvObrasDetails) report += `${lvObrasDetails}\n`;
+      }
+      
       report += `\n---\n\n`;
     }
     
