@@ -89,8 +89,13 @@ Deno.serve(async (req) => {
 
       if (authError) {
         console.error('Auth error:', authError)
+        // Translate common error messages
+        let errorMessage = authError.message
+        if (authError.message.includes('already been registered') || authError.code === 'email_exists') {
+          errorMessage = 'Este usuário já está cadastrado no sistema'
+        }
         return new Response(
-          JSON.stringify({ error: authError.message }),
+          JSON.stringify({ error: errorMessage }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
