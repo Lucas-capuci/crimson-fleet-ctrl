@@ -508,7 +508,7 @@ const Admin = () => {
       userId: selectedUserId,
       name: editUserForm.name,
       role: editUserForm.role,
-      permissionProfileId: editUserForm.permissionProfileId || undefined,
+      permissionProfileId: editUserForm.permissionProfileId === "none" ? undefined : editUserForm.permissionProfileId || undefined,
     });
   };
 
@@ -842,7 +842,7 @@ const Admin = () => {
                         <SelectValue placeholder="Selecione um perfil" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Nenhum</SelectItem>
+                        <SelectItem value="none">Nenhum</SelectItem>
                         {permissionProfiles.map((pp) => (
                           <SelectItem key={pp.id} value={pp.id}>
                             {pp.name}
