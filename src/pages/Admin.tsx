@@ -298,38 +298,18 @@ const Admin = () => {
       if (response.error) throw new Error(response.error.message);
       if (response.data?.error) throw new Error(response.data.error);
 
-      const userId = response.data?.userId;
-
       // If a permission profile was selected, assign it
-      if (data.permissionProfileId && userId) {
+      if (data.permissionProfileId && response.data?.userId) {
         const { error: permError } = await supabase
           .from("user_permissions")
-          .insert({ user_id: userId, profile_id: data.permissionProfileId });
+          .insert({ user_id: response.data.userId, profile_id: data.permissionProfileId });
         if (permError) console.error("Error assigning permission profile:", permError);
-
-        // Check if the selected profile is "Visualizador Geral" - if so, assign all teams
-        const selectedProfile = permissionProfiles.find(p => p.id === data.permissionProfileId);
-        if (selectedProfile?.name.toLowerCase().includes("visualizador") && selectedProfile?.name.toLowerCase().includes("geral")) {
-          // Get all teams and assign them to the user
-          const { data: allTeams } = await supabase.from("teams").select("id");
-          if (allTeams && allTeams.length > 0) {
-            const teamAssignments = allTeams.map(team => ({
-              supervisor_id: userId,
-              team_id: team.id
-            }));
-            const { error: teamError } = await supabase
-              .from("supervisor_teams")
-              .insert(teamAssignments);
-            if (teamError) console.error("Error assigning teams:", teamError);
-          }
-        }
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["all_profiles"] });
       queryClient.invalidateQueries({ queryKey: ["user_roles_with_profiles"] });
       queryClient.invalidateQueries({ queryKey: ["user_permissions_all"] });
-      queryClient.invalidateQueries({ queryKey: ["supervisor_teams_with_data"] });
       toast({ title: "Usuário criado com sucesso!" });
       setIsNewUserDialogOpen(false);
       setNewUserForm({ name: "", username: "", password: "", role: "supervisor", permissionProfileId: "" });
