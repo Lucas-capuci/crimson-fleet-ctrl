@@ -17,24 +17,37 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { usePermissions, PageName } from "@/hooks/usePermissions";
 
-const navItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Equipes", url: "/equipes", icon: Users2 },
-  { title: "Veículos", url: "/veiculos", icon: Car },
-  { title: "Escala", url: "/escala", icon: CalendarDays },
-  { title: "Saída", url: "/saida", icon: LogIn },
-  { title: "Oficina", url: "/oficina", icon: Building },
-  { title: "Motoristas", url: "/motoristas", icon: Users },
+interface NavItem {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  page: PageName;
+}
+
+const navItems: NavItem[] = [
+  { title: "Dashboard", url: "/", icon: LayoutDashboard, page: "dashboard" },
+  { title: "Equipes", url: "/equipes", icon: Users2, page: "teams" },
+  { title: "Veículos", url: "/veiculos", icon: Car, page: "vehicles" },
+  { title: "Escala", url: "/escala", icon: CalendarDays, page: "schedule" },
+  { title: "Saída", url: "/saida", icon: LogIn, page: "departures" },
+  { title: "Oficina", url: "/oficina", icon: Building, page: "workshop" },
+  { title: "Motoristas", url: "/motoristas", icon: Users, page: "drivers" },
 ];
 
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, isAdmin, signOut } = useAuth();
+  const { canViewPage } = usePermissions();
 
+  // Filter nav items based on permissions
+  const visibleNavItems = navItems.filter((item) => canViewPage(item.page));
+
+  // Add admin page if user is admin
   const allNavItems = isAdmin 
-    ? [...navItems, { title: "Administração", url: "/admin", icon: Shield }]
-    : navItems;
+    ? [...visibleNavItems, { title: "Administração", url: "/admin", icon: Shield, page: "admin" as PageName }]
+    : visibleNavItems;
 
   return (
     <>
