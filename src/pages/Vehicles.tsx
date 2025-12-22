@@ -28,6 +28,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Search, Edit, Trash2, Car } from "lucide-react";
+import { ExportButton } from "@/components/ExportButton";
+import { CsvColumn } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -205,6 +207,21 @@ const Vehicles = () => {
     return matchesSearch && matchesStatus;
   });
 
+  // CSV columns for vehicles
+  const csvColumns: CsvColumn[] = [
+    { key: "plate", header: "Placa" },
+    { key: "model", header: "Modelo" },
+    { key: "status", header: "Status", format: (v) => statusConfig[v as VehicleStatus]?.label || v },
+    { key: "team_id", header: "Equipe", format: (v) => getTeamName(v) || "-" },
+    { key: "team_id", header: "Supervisor", format: (v) => getSupervisorName(v) || "-" },
+  ];
+
+  const csvData = filteredVehicles.map(v => ({
+    ...v,
+    teamName: getTeamName(v.team_id) || "-",
+    supervisorName: getSupervisorName(v.team_id) || "-",
+  }));
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingVehicle) {
@@ -265,9 +282,14 @@ const Vehicles = () => {
             <SelectItem value="manutencao">Em Manutenção</SelectItem>
             <SelectItem value="reserva">Reserva</SelectItem>
             <SelectItem value="oficina">Oficina</SelectItem>
-            <SelectItem value="mobilizar">Mobilizar</SelectItem>
+          <SelectItem value="mobilizar">Mobilizar</SelectItem>
           </SelectContent>
         </Select>
+        <ExportButton
+          data={csvData}
+          filename={`veiculos-${new Date().toISOString().split('T')[0]}`}
+          columns={csvColumns}
+        />
         {isAdmin && (
           <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); else setIsDialogOpen(true); }}>
             <DialogTrigger asChild>

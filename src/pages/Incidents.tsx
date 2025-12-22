@@ -20,6 +20,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Plus, Search, AlertTriangle, FileWarning, Car, Calendar, User } from "lucide-react";
+import { ExportButton } from "@/components/ExportButton";
+import { CsvColumn, formatDate } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 
@@ -77,6 +79,17 @@ const Incidents = () => {
     return matchesSearch && matchesType;
   });
 
+  // CSV columns
+  const csvColumns: CsvColumn[] = [
+    { key: "date", header: "Data", format: (v) => formatDate(v) },
+    { key: "vehiclePlate", header: "Placa" },
+    { key: "vehicleModel", header: "Modelo" },
+    { key: "driverName", header: "Motorista" },
+    { key: "type", header: "Tipo", format: (v) => typeConfig[v as keyof typeof typeConfig]?.label || v },
+    { key: "severity", header: "Gravidade", format: (v) => severityConfig[v as keyof typeof severityConfig]?.label || v },
+    { key: "description", header: "Descrição" },
+  ];
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const newIncident: Incident = {
@@ -133,10 +146,15 @@ const Incidents = () => {
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
-              <Plus className="h-4 w-4" />
+            <Plus className="h-4 w-4" />
               Nova Ocorrência
             </Button>
           </DialogTrigger>
+          <ExportButton
+            data={filteredIncidents}
+            filename={`ocorrencias-${new Date().toISOString().split('T')[0]}`}
+            columns={csvColumns}
+          />
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Registrar Ocorrência</DialogTitle>

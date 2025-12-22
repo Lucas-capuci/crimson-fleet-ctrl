@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Search, Edit, Trash2, User, Car, Clock, Phone } from "lucide-react";
+import { ExportButton } from "@/components/ExportButton";
+import { CsvColumn } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 
@@ -79,6 +81,25 @@ const Drivers = () => {
       d.equipe.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // CSV columns for drivers
+  const driversCsvColumns: CsvColumn[] = [
+    { key: "name", header: "Nome" },
+    { key: "matricula", header: "Matrícula" },
+    { key: "funcao", header: "Função" },
+    { key: "equipe", header: "Equipe" },
+    { key: "contato", header: "Contato" },
+  ];
+
+  // CSV columns for allocations
+  const allocationsCsvColumns: CsvColumn[] = [
+    { key: "driverName", header: "Motorista" },
+    { key: "vehicleModel", header: "Veículo" },
+    { key: "vehiclePlate", header: "Placa" },
+    { key: "checkoutDate", header: "Retirada" },
+    { key: "expectedReturn", header: "Previsão Retorno" },
+    { key: "status", header: "Status", format: (v) => v === "em_uso" ? "Em Uso" : "Disponível" },
+  ];
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -130,16 +151,23 @@ const Drivers = () => {
       </div>
 
       <Tabs defaultValue="drivers" className="animate-fade-in">
-        <TabsList className="mb-6">
-          <TabsTrigger value="drivers" className="gap-2">
-            <User className="h-4 w-4" />
-            Motoristas ({drivers.length})
-          </TabsTrigger>
-          <TabsTrigger value="allocations" className="gap-2">
-            <Car className="h-4 w-4" />
-            Alocações ({allocations.length})
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between mb-6">
+          <TabsList>
+            <TabsTrigger value="drivers" className="gap-2">
+              <User className="h-4 w-4" />
+              Motoristas ({drivers.length})
+            </TabsTrigger>
+            <TabsTrigger value="allocations" className="gap-2">
+              <Car className="h-4 w-4" />
+              Alocações ({allocations.length})
+            </TabsTrigger>
+          </TabsList>
+          <ExportButton
+            data={filteredDrivers}
+            filename={`motoristas-${new Date().toISOString().split('T')[0]}`}
+            columns={driversCsvColumns}
+          />
+        </div>
 
         <TabsContent value="drivers">
           {/* Actions */}

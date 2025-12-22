@@ -1,11 +1,15 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CheckCircle2, XCircle, Clock, TrendingUp, Users } from "lucide-react";
+import { ExportButton } from "@/components/ExportButton";
+import { CsvColumn, formatBoolean } from "@/lib/exportCsv";
 
 const teamTypeLabels: Record<string, string> = {
   linha_viva: "Linha Viva",
@@ -20,15 +24,36 @@ interface DepartureRecord {
   departed: boolean;
   departure_time: string | null;
   no_departure_reason: string | null;
-  teams: { name: string } | null;
+  teams: { name: string; type: string } | null;
   supervisorName: string;
+  date: string;
+}
+
+interface DailyStats {
+  date: string;
+  dateFormatted: string;
+  percentage: number;
+  departed: number;
+  total: number;
+  avgTime: string | null;
+  departures: DepartureRecord[];
+}
+
+interface TeamTypeStats {
+  type: string;
+  label: string;
+  departed: number;
+  total: number;
+  percentage: number;
+  avgTime: string | null;
 }
 
 export function DeparturesOverview() {
   const today = format(new Date(), "yyyy-MM-dd");
+  const [selectedDay, setSelectedDay] = useState<DailyStats | null>(null);
 
   // Weekly departures for analytics
-  const { data: weeklyDepartures } = useQuery({
+  const { data: weeklyDepartures = [] } = useQuery({
     queryKey: ["dashboard_weekly_departures"],
     queryFn: async () => {
       const startDate = format(subDays(new Date(), 7), "yyyy-MM-dd");
@@ -37,7 +62,25 @@ export function DeparturesOverview() {
         .select(`*, teams!inner(name, type)`)
         .gte("date", startDate);
       if (error) throw error;
-      return data;
+      
+      // Fetch supervisor names
+      const supervisorIds = [...new Set(data.map(d => d.supervisor_id))];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, name")
+        .in("id", supervisorIds);
+      
+      const profilesMap = new Map(profiles?.map(p => [p.id, p.name]) || []);
+      
+      return data.map(d => ({
+        id: d.id,
+        departed: d.departed,
+        departure_time: d.departure_time,
+        no_departure_reason: d.no_departure_reason,
+        teams: d.teams,
+        date: d.date,
+        supervisorName: profilesMap.get(d.supervisor_id) || "-"
+      })) as DepartureRecord[];
     },
   });
 
@@ -47,7 +90,7 @@ export function DeparturesOverview() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("departures")
-        .select("id, departed, departure_time, no_departure_reason, supervisor_id, teams(name)")
+        .select("id, departed, departure_time, no_departure_reason, supervisor_id, date, teams(name, type)")
         .eq("date", today)
         .order("created_at", { ascending: false })
         .limit(10);
@@ -69,6 +112,7 @@ export function DeparturesOverview() {
           departure_time: d.departure_time,
           no_departure_reason: d.no_departure_reason,
           teams: d.teams,
+          date: d.date,
           supervisorName: profilesMap.get(d.supervisor_id) || "-"
         })) as DepartureRecord[];
     },
@@ -97,31 +141,108 @@ export function DeparturesOverview() {
     };
   });
 
-  // Calculate daily departure percentage
+  // Calculate daily stats including average time
   const dailyStats = weeklyDepartures?.reduce((acc, dep) => {
     const date = dep.date;
-    if (!acc[date]) acc[date] = { total: 0, departed: 0 };
+    if (!acc[date]) acc[date] = { total: 0, departed: 0, totalMinutes: 0, departedWithTime: 0, departures: [] };
     acc[date].total += 1;
-    if (dep.departed) acc[date].departed += 1;
+    acc[date].departures.push(dep);
+    if (dep.departed) {
+      acc[date].departed += 1;
+      if (dep.departure_time) {
+        const [hours, minutes] = dep.departure_time.split(":").map(Number);
+        acc[date].totalMinutes += hours * 60 + minutes;
+        acc[date].departedWithTime += 1;
+      }
+    }
     return acc;
-  }, {} as Record<string, { total: number; departed: number }>);
+  }, {} as Record<string, { total: number; departed: number; totalMinutes: number; departedWithTime: number; departures: DepartureRecord[] }>);
 
-  const dailyPercentages = Object.entries(dailyStats || {})
-    .map(([date, data]) => ({
-      date,
-      dateFormatted: format(new Date(date + "T12:00:00"), "EEE dd/MM", { locale: ptBR }),
-      percentage: data.total > 0 ? Math.round((data.departed / data.total) * 100) : 0,
-      departed: data.departed,
-      total: data.total,
-    }))
+  const dailyPercentages: DailyStats[] = Object.entries(dailyStats || {})
+    .map(([date, data]) => {
+      let avgTime: string | null = null;
+      if (data.departedWithTime > 0) {
+        const avgMinutes = Math.round(data.totalMinutes / data.departedWithTime);
+        const hours = Math.floor(avgMinutes / 60);
+        const minutes = avgMinutes % 60;
+        avgTime = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+      }
+      return {
+        date,
+        dateFormatted: format(new Date(date + "T12:00:00"), "EEE dd/MM", { locale: ptBR }),
+        percentage: data.total > 0 ? Math.round((data.departed / data.total) * 100) : 0,
+        departed: data.departed,
+        total: data.total,
+        avgTime,
+        departures: data.departures,
+      };
+    })
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 7);
+
+  // Calculate team type stats for selected day
+  const getTeamTypeStats = (departures: DepartureRecord[]): TeamTypeStats[] => {
+    const typeStats: Record<string, { departed: number; total: number; totalMinutes: number; departedWithTime: number }> = {};
+    
+    departures.forEach(dep => {
+      const type = dep.teams?.type || "unknown";
+      if (!typeStats[type]) {
+        typeStats[type] = { departed: 0, total: 0, totalMinutes: 0, departedWithTime: 0 };
+      }
+      typeStats[type].total += 1;
+      if (dep.departed) {
+        typeStats[type].departed += 1;
+        if (dep.departure_time) {
+          const [hours, minutes] = dep.departure_time.split(":").map(Number);
+          typeStats[type].totalMinutes += hours * 60 + minutes;
+          typeStats[type].departedWithTime += 1;
+        }
+      }
+    });
+    
+    return Object.entries(typeStats).map(([type, data]) => {
+      let avgTime: string | null = null;
+      if (data.departedWithTime > 0) {
+        const avgMinutes = Math.round(data.totalMinutes / data.departedWithTime);
+        const hours = Math.floor(avgMinutes / 60);
+        const minutes = avgMinutes % 60;
+        avgTime = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+      }
+      return {
+        type,
+        label: teamTypeLabels[type] || type,
+        departed: data.departed,
+        total: data.total,
+        percentage: data.total > 0 ? Math.round((data.departed / data.total) * 100) : 0,
+        avgTime,
+      };
+    }).sort((a, b) => a.label.localeCompare(b.label));
+  };
 
   // Overall stats
   const totalDepartures = weeklyDepartures?.length || 0;
   const totalDeparted = weeklyDepartures?.filter((d) => d.departed).length || 0;
   const overallPercentage = totalDepartures > 0 ? Math.round((totalDeparted / totalDepartures) * 100) : 0;
   const todayStats = dailyPercentages.find(d => d.date === today);
+
+  // CSV columns for departures
+  const departuresCsvColumns: CsvColumn[] = [
+    { key: "date", header: "Data", format: (v) => format(new Date(v + "T12:00:00"), "dd/MM/yyyy") },
+    { key: "teams", header: "Equipe", format: (v) => v?.name || "-" },
+    { key: "teams", header: "Tipo", format: (v) => teamTypeLabels[v?.type] || v?.type || "-" },
+    { key: "supervisorName", header: "Supervisor" },
+    { key: "departed", header: "Status", format: (v) => formatBoolean(v, "Saiu", "Não Saiu") },
+    { key: "departure_time", header: "Horário", format: (v) => v || "-" },
+    { key: "no_departure_reason", header: "Motivo", format: (v) => v || "-" },
+  ];
+
+  const dailyCsvColumns: CsvColumn[] = [
+    { key: "date", header: "Data", format: (v) => format(new Date(v + "T12:00:00"), "dd/MM/yyyy") },
+    { key: "departed", header: "Saíram" },
+    { key: "total", header: "Total" },
+    { key: "percentage", header: "Porcentagem", format: (v) => `${v}%` },
+    { key: "avgTime", header: "Tempo Médio", format: (v) => v || "-" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -197,19 +318,28 @@ export function DeparturesOverview() {
         </CardContent>
       </Card>
 
-      {/* Daily Percentage */}
+      {/* Daily Percentage with Average Time */}
       <Card className="bg-card border-border">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-primary" />
             Porcentagem de Saída por Dia
           </CardTitle>
+          <ExportButton
+            data={dailyPercentages}
+            filename={`saidas-diarias-${format(new Date(), "yyyy-MM-dd")}`}
+            columns={dailyCsvColumns}
+          />
         </CardHeader>
         <CardContent>
           {dailyPercentages.length > 0 ? (
             <div className="space-y-3">
               {dailyPercentages.map((day) => (
-                <div key={day.date} className="flex items-center gap-4">
+                <div 
+                  key={day.date} 
+                  className="flex items-center gap-4 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                  onClick={() => setSelectedDay(day)}
+                >
                   <span className="text-sm text-muted-foreground w-20 capitalize">{day.dateFormatted}</span>
                   <div className="flex-1 bg-muted rounded-full h-3 overflow-hidden">
                     <div
@@ -218,7 +348,10 @@ export function DeparturesOverview() {
                     />
                   </div>
                   <span className="text-sm font-medium text-foreground w-12 text-right">{day.percentage}%</span>
-                  <span className="text-xs text-muted-foreground w-10">({day.departed}/{day.total})</span>
+                  <span className="text-sm font-medium text-primary w-14 text-center">
+                    {day.avgTime || "--:--"}
+                  </span>
+                  <span className="text-xs text-muted-foreground w-14">({day.departed}/{day.total})</span>
                 </div>
               ))}
             </div>
@@ -234,18 +367,25 @@ export function DeparturesOverview() {
           <CardTitle className="text-lg font-semibold">
             Saídas de Hoje - {format(new Date(), "dd/MM/yyyy", { locale: ptBR })}
           </CardTitle>
-          {todayStats && todayStats.total > 0 && (
-            <div className="flex gap-3 text-sm">
-              <span className="flex items-center gap-1 text-green-600">
-                <CheckCircle2 className="h-4 w-4" />
-                {todayStats.departed}
-              </span>
-              <span className="flex items-center gap-1 text-red-600">
-                <XCircle className="h-4 w-4" />
-                {todayStats.total - todayStats.departed}
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {todayStats && todayStats.total > 0 && (
+              <div className="flex gap-3 text-sm">
+                <span className="flex items-center gap-1 text-green-600">
+                  <CheckCircle2 className="h-4 w-4" />
+                  {todayStats.departed}
+                </span>
+                <span className="flex items-center gap-1 text-red-600">
+                  <XCircle className="h-4 w-4" />
+                  {todayStats.total - todayStats.departed}
+                </span>
+              </div>
+            )}
+            <ExportButton
+              data={departures}
+              filename={`saidas-hoje-${format(new Date(), "yyyy-MM-dd")}`}
+              columns={departuresCsvColumns}
+            />
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -291,6 +431,125 @@ export function DeparturesOverview() {
           )}
         </CardContent>
       </Card>
+
+      {/* Day Details Modal */}
+      <Dialog open={!!selectedDay} onOpenChange={(open) => !open && setSelectedDay(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              📅 Saídas - {selectedDay && format(new Date(selectedDay.date + "T12:00:00"), "EEEE dd/MM/yyyy", { locale: ptBR })}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedDay && (
+            <div className="space-y-6">
+              {/* Summary */}
+              <div className="bg-muted/50 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-2xl font-bold text-foreground">{selectedDay.percentage}%</span>
+                    <span className="text-muted-foreground ml-2">({selectedDay.departed}/{selectedDay.total})</span>
+                  </div>
+                  {selectedDay.avgTime && (
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-primary" />
+                      <span className="text-lg font-semibold text-primary">{selectedDay.avgTime}</span>
+                      <span className="text-sm text-muted-foreground">tempo médio</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Stats by Team Type */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Por Tipo de Equipe
+                </h3>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead className="text-center">Saíram</TableHead>
+                      <TableHead className="text-center">%</TableHead>
+                      <TableHead className="text-center">Média</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {getTeamTypeStats(selectedDay.departures).map((stat) => (
+                      <TableRow key={stat.type}>
+                        <TableCell className="font-medium">{stat.label}</TableCell>
+                        <TableCell className="text-center">{stat.departed}/{stat.total}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={stat.percentage >= 80 ? "default" : stat.percentage >= 50 ? "secondary" : "destructive"}>
+                            {stat.percentage}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center text-primary font-medium">
+                          {stat.avgTime || "--:--"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Team List */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    Detalhes das Equipes
+                  </h3>
+                  <ExportButton
+                    data={selectedDay.departures}
+                    filename={`saidas-${selectedDay.date}`}
+                    columns={departuresCsvColumns}
+                    size="sm"
+                  />
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Equipe</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Horário/Motivo</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedDay.departures
+                      .sort((a, b) => (a.teams?.name || "").localeCompare(b.teams?.name || ""))
+                      .map((dep) => (
+                        <TableRow key={dep.id}>
+                          <TableCell className="font-medium">{dep.teams?.name}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {teamTypeLabels[dep.teams?.type || ""] || dep.teams?.type}
+                          </TableCell>
+                          <TableCell>
+                            {dep.departed ? (
+                              <Badge variant="default" className="bg-green-600 text-xs">
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Saiu
+                              </Badge>
+                            ) : (
+                              <Badge variant="destructive" className="text-xs">
+                                <XCircle className="h-3 w-3 mr-1" />
+                                Não
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {dep.departed ? dep.departure_time : (dep.no_departure_reason || "-")}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Search, Wrench, Clock, CheckCircle, Calendar, LogOut } from "lucide-react";
+import { ExportButton } from "@/components/ExportButton";
+import { CsvColumn, formatDateTime } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -184,6 +186,18 @@ const Workshop = () => {
   const activeEntries = entries.filter((e) => e.status !== "concluida");
   const completedEntries = entries.filter((e) => e.status === "concluida");
 
+  // CSV columns
+  const csvColumns: CsvColumn[] = [
+    { key: "vehicles", header: "Placa", format: (v) => v?.plate || "-" },
+    { key: "vehicles", header: "Modelo", format: (v) => v?.model || "-" },
+    { key: "vehicles", header: "Equipe", format: (v) => getTeamName(v?.team_id || null) },
+    { key: "reason", header: "Motivo" },
+    { key: "entry_date", header: "Entrada", format: (v) => formatDateTime(v) },
+    { key: "exit_date", header: "Saída", format: (v) => formatDateTime(v) },
+    { key: "status", header: "Status", format: (v) => statusConfig[v as MaintenanceStatus]?.label || v },
+    { key: "notes", header: "Observações", format: (v) => v || "-" },
+  ];
+
   const getTeamName = (teamId: string | null) => {
     if (!teamId) return "Sem equipe";
     return teamsMap[teamId] || "Sem equipe";
@@ -312,10 +326,15 @@ const Workshop = () => {
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
-              <Plus className="h-4 w-4" />
+            <Plus className="h-4 w-4" />
               Registrar Entrada
             </Button>
           </DialogTrigger>
+          <ExportButton
+            data={entries}
+            filename={`oficina-${new Date().toISOString().split('T')[0]}`}
+            columns={csvColumns}
+          />
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Registrar Entrada na Oficina</DialogTitle>
