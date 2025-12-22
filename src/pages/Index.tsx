@@ -1,12 +1,15 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { StatsCard } from "@/components/dashboard/StatsCard";
 import { DeparturesOverview } from "@/components/dashboard/DeparturesOverview";
+import { WorkshopVehiclesModal } from "@/components/dashboard/WorkshopVehiclesModal";
 import { Car, Wrench, Users, LogIn } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 
 const Dashboard = () => {
+  const [workshopModalOpen, setWorkshopModalOpen] = useState(false);
   const { data: vehicleStats } = useQuery({
     queryKey: ["dashboard_vehicle_stats"],
     queryFn: async () => {
@@ -70,7 +73,7 @@ const Dashboard = () => {
           value={vehicleStats?.inMaintenance ?? 0}
           icon={Wrench}
           variant="warning"
-          href="/workshop"
+          onClick={() => setWorkshopModalOpen(true)}
         />
         <StatsCard
           title="Motoristas Ativos"
@@ -88,6 +91,12 @@ const Dashboard = () => {
 
       {/* Departures Overview with KPIs */}
       <DeparturesOverview />
+
+      {/* Workshop Vehicles Modal */}
+      <WorkshopVehiclesModal
+        open={workshopModalOpen}
+        onOpenChange={setWorkshopModalOpen}
+      />
     </MainLayout>
   );
 };

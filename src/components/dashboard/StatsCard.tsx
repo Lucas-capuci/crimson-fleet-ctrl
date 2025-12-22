@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 
 interface StatsCardProps {
   title: string;
@@ -11,7 +10,7 @@ interface StatsCardProps {
     isPositive: boolean;
   };
   variant?: "default" | "primary" | "success" | "warning" | "destructive";
-  href?: string;
+  onClick?: () => void;
 }
 
 const variantStyles = {
@@ -36,21 +35,14 @@ export function StatsCard({
   icon: Icon,
   trend,
   variant = "default",
-  href,
+  onClick,
 }: StatsCardProps) {
-  const navigate = useNavigate();
   const isColored = variant !== "default";
-  const isClickable = !!href;
-
-  const handleClick = () => {
-    if (href) {
-      navigate(href);
-    }
-  };
+  const isClickable = !!onClick;
 
   return (
     <div
-      onClick={handleClick}
+      onClick={onClick}
       className={cn(
         "rounded-xl p-6 card-hover animate-fade-in",
         variantStyles[variant],
