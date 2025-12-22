@@ -38,14 +38,14 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
-  const { user, isAdmin, signOut } = useAuth();
+  const { user, isAdmin, userRole, signOut } = useAuth();
   const { canViewPage } = usePermissions();
 
   // Filter nav items based on permissions
   const visibleNavItems = navItems.filter((item) => canViewPage(item.page));
 
-  // Add admin page if user is admin
-  const allNavItems = isAdmin 
+  // Add admin page only if user is admin (not gestor)
+  const allNavItems = userRole === "admin"
     ? [...visibleNavItems, { title: "Administração", url: "/admin", icon: Shield, page: "admin" as PageName }]
     : visibleNavItems;
 

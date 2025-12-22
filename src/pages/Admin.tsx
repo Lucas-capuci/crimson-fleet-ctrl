@@ -39,7 +39,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import { PAGE_LABELS, ACTION_LABELS, PermissionAction, PageName } from "@/hooks/usePermissions";
 
-type AppRole = "admin" | "supervisor";
+type AppRole = "admin" | "supervisor" | "gestor";
 
 interface Profile {
   id: string;
@@ -93,7 +93,7 @@ const newUserSchema = z.object({
   name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),
   username: z.string().min(3, "Usuário deve ter no mínimo 3 caracteres").regex(/^[a-z0-9._]+$/, "Use apenas letras minúsculas, números, pontos e underscores"),
   password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
-  role: z.enum(["admin", "supervisor"]),
+  role: z.enum(["admin", "supervisor", "gestor"]),
 });
 
 const PAGES: PageName[] = ["dashboard", "vehicles", "drivers", "teams", "departures", "maintenance", "incidents", "schedule", "workshop", "admin"];
@@ -463,7 +463,7 @@ const Admin = () => {
     { key: "profile", header: "Usuário", format: (v) => v?.username || "-" },
     { key: "profile", header: "Nome", format: (v) => v?.name || "-" },
     { key: "profile", header: "Email", format: (v) => v?.email || "-" },
-    { key: "role", header: "Função", format: (v) => v === "admin" ? "Administrador" : "Supervisor" },
+    { key: "role", header: "Função", format: (v) => v === "admin" ? "Administrador" : v === "gestor" ? "Gestor" : "Supervisor" },
   ];
 
   // CSV columns for supervisor-team links
@@ -560,6 +560,7 @@ const Admin = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="admin">Administrador</SelectItem>
+                        <SelectItem value="gestor">Gestor</SelectItem>
                         <SelectItem value="supervisor">Supervisor</SelectItem>
                       </SelectContent>
                     </Select>
@@ -627,8 +628,8 @@ const Admin = () => {
                       </TableCell>
                       <TableCell>{role.profile?.name || "Usuário"}</TableCell>
                       <TableCell>
-                        <Badge variant={role.role === "admin" ? "default" : "secondary"}>
-                          {role.role === "admin" ? "Administrador" : "Supervisor"}
+                        <Badge variant={role.role === "admin" ? "default" : role.role === "gestor" ? "outline" : "secondary"}>
+                          {role.role === "admin" ? "Administrador" : role.role === "gestor" ? "Gestor" : "Supervisor"}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -806,6 +807,7 @@ const Admin = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="admin">Administrador</SelectItem>
+                        <SelectItem value="gestor">Gestor</SelectItem>
                         <SelectItem value="supervisor">Supervisor</SelectItem>
                       </SelectContent>
                     </Select>
@@ -849,8 +851,8 @@ const Admin = () => {
                     </TableCell>
                     <TableCell>{role.profile?.name || "Usuário"}</TableCell>
                     <TableCell>
-                      <Badge variant={role.role === "admin" ? "default" : "secondary"}>
-                        {role.role === "admin" ? "Administrador" : "Supervisor"}
+                      <Badge variant={role.role === "admin" ? "default" : role.role === "gestor" ? "outline" : "secondary"}>
+                        {role.role === "admin" ? "Administrador" : role.role === "gestor" ? "Gestor" : "Supervisor"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">

@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
-  const { user, loading, isAdmin } = useAuth();
+  const { user, loading, userRole } = useAuth();
 
   if (loading) {
     return (
@@ -22,7 +22,8 @@ export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRout
     return <Navigate to="/auth" replace />;
   }
 
-  if (requireAdmin && !isAdmin) {
+  // Only "admin" role can access admin-protected routes (not "gestor")
+  if (requireAdmin && userRole !== "admin") {
     return <Navigate to="/" replace />;
   }
 
