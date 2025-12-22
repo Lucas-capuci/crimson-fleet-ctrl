@@ -154,17 +154,43 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'delete') {
-      const { userId } = data
+      const { userId, username } = data
 
-      if (!userId) {
+      let targetUserId = userId
+
+      // If username provided instead of userId, find the user
+      if (!targetUserId && username) {
+        const email = `${username}@fleetcontrol.local`
+        const { data: users, error: listError } = await supabaseAdmin.auth.admin.listUsers()
+        
+        if (listError) {
+          console.error('List users error:', listError)
+          return new Response(
+            JSON.stringify({ error: listError.message }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        const foundUser = users.users.find(u => u.email === email)
+        if (foundUser) {
+          targetUserId = foundUser.id
+        } else {
+          return new Response(
+            JSON.stringify({ error: 'Usuário não encontrado' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+      }
+
+      if (!targetUserId) {
         return new Response(
-          JSON.stringify({ error: 'ID do usuário é obrigatório' }),
+          JSON.stringify({ error: 'ID do usuário ou username é obrigatório' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
 
       // Prevent deleting yourself
-      if (userId === requestingUser.id) {
+      if (targetUserId === requestingUser.id) {
         return new Response(
           JSON.stringify({ error: 'Você não pode excluir seu próprio usuário' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -172,7 +198,7 @@ Deno.serve(async (req) => {
       }
 
       // Delete user from auth (cascade will handle related tables)
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(targetUserId)
 
       if (error) {
         console.error('Delete user error:', error)
@@ -182,7 +208,7 @@ Deno.serve(async (req) => {
         )
       }
 
-      console.log('User deleted:', userId)
+      console.log('User deleted:', targetUserId)
 
       return new Response(
         JSON.stringify({ success: true }),
