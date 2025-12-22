@@ -123,6 +123,62 @@ Deno.serve(async (req) => {
       )
     }
 
+    if (action === 'update') {
+      const { userId, name, role } = data
+
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ error: 'ID do usuário é obrigatório' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Update profile name if provided
+      if (name) {
+        const { error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .update({ name })
+          .eq('id', userId)
+
+        if (profileError) {
+          console.error('Profile update error:', profileError)
+          return new Response(
+            JSON.stringify({ error: 'Erro ao atualizar perfil' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+      }
+
+      // Update role if provided
+      if (role) {
+        // First delete existing role
+        await supabaseAdmin
+          .from('user_roles')
+          .delete()
+          .eq('user_id', userId)
+
+        // Then insert new role
+        const { error: roleError } = await supabaseAdmin
+          .from('user_roles')
+          .insert({ user_id: userId, role })
+
+        if (roleError) {
+          console.error('Role update error:', roleError)
+          return new Response(
+            JSON.stringify({ error: 'Erro ao atualizar função' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+      }
+
+      console.log('User updated:', userId)
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     if (action === 'reset-password') {
       const { userId, newPassword } = data
 
