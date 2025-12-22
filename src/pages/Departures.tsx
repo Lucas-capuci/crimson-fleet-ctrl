@@ -16,6 +16,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Play, Check, X, ChevronLeft, ChevronRight, Calendar, Clock, Users, Pencil } from "lucide-react";
+import { ExportButton } from "@/components/ExportButton";
+import { CsvColumn, formatBoolean } from "@/lib/exportCsv";
 
 interface Team {
   id: string;

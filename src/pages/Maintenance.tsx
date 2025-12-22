@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Search, Wrench, Calendar, AlertCircle, CheckCircle, Clock } from "lucide-react";
+import { ExportButton } from "@/components/ExportButton";
+import { CsvColumn, formatDate, formatCurrency } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -167,6 +169,18 @@ const Maintenance = () => {
   const completedMaintenances = maintenances.filter(m => m.status === "concluida");
   const upcomingMaintenances = maintenances.filter(m => m.status !== "concluida");
 
+  // CSV columns
+  const csvColumns: CsvColumn[] = [
+    { key: "vehicles", header: "Placa", format: (v) => v?.plate || "-" },
+    { key: "vehicles", header: "Modelo", format: (v) => v?.model || "-" },
+    { key: "vehicles", header: "Equipe", format: (v) => getTeamName(v?.team_id || null) },
+    { key: "type", header: "Tipo" },
+    { key: "status", header: "Status", format: (v) => statusConfig[v as MaintenanceStatus]?.label || v },
+    { key: "scheduled_date", header: "Data Prevista", format: (v) => formatDate(v) },
+    { key: "cost", header: "Custo", format: (v) => formatCurrency(v) },
+    { key: "description", header: "Descrição", format: (v) => v || "-" },
+  ];
+
   const getTeamName = (teamId: string | null) => {
     if (!teamId) return "Sem equipe";
     return teamsMap[teamId] || "Sem equipe";
@@ -259,10 +273,15 @@ const Maintenance = () => {
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
-              <Plus className="h-4 w-4" />
+            <Plus className="h-4 w-4" />
               Nova Manutenção
             </Button>
           </DialogTrigger>
+          <ExportButton
+            data={maintenances}
+            filename={`manutencoes-${new Date().toISOString().split('T')[0]}`}
+            columns={csvColumns}
+          />
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Registrar Manutenção</DialogTitle>
