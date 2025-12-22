@@ -31,7 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, User, Users, Shield, Link2, Unlink, KeyRound, UserPlus, Settings, Check, Trash2 } from "lucide-react";
+import { Plus, User, Users, Shield, Link2, Unlink, KeyRound, UserPlus, Settings, Check, Trash2, Pencil } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn } from "@/lib/exportCsv";
 import { toast } from "@/hooks/use-toast";
@@ -106,11 +106,13 @@ const Admin = () => {
   const [isNewUserDialogOpen, setIsNewUserDialogOpen] = useState(false);
   const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
   const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
+  const [isEditUserDialogOpen, setIsEditUserDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedRole, setSelectedRole] = useState<AppRole>("supervisor");
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [selectedProfileId, setSelectedProfileId] = useState("");
   const [newUserForm, setNewUserForm] = useState({ name: "", username: "", password: "", role: "supervisor" as AppRole, permissionProfileId: "" });
+  const [editUserForm, setEditUserForm] = useState({ name: "", role: "supervisor" as AppRole, permissionProfileId: "" });
   const [newPassword, setNewPassword] = useState("");
   const [resetPasswordUserId, setResetPasswordUserId] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -344,6 +346,51 @@ const Admin = () => {
     },
   });
 
+  const updateUser = useMutation({
+    mutationFn: async (data: { userId: string; name: string; role: AppRole; permissionProfileId?: string }) => {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) throw new Error("Não autenticado");
+
+      const response = await supabase.functions.invoke("manage-users", {
+        body: { action: "update", userId: data.userId, name: data.name, role: data.role },
+      });
+
+      if (response.error) throw new Error(response.error.message);
+      if (response.data?.error) throw new Error(response.data.error);
+
+      // Update permission profile
+      const existing = userPermissions.find((up) => up.user_id === data.userId);
+      if (data.permissionProfileId) {
+        if (existing) {
+          await supabase
+            .from("user_permissions")
+            .update({ profile_id: data.permissionProfileId })
+            .eq("id", existing.id);
+        } else {
+          await supabase
+            .from("user_permissions")
+            .insert({ user_id: data.userId, profile_id: data.permissionProfileId });
+        }
+      } else if (existing) {
+        await supabase
+          .from("user_permissions")
+          .delete()
+          .eq("id", existing.id);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all_profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["user_roles_with_profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["user_permissions_all"] });
+      toast({ title: "Usuário atualizado com sucesso!" });
+      setIsEditUserDialogOpen(false);
+      setSelectedUserId("");
+    },
+    onError: (error) => {
+      toast({ title: "Erro ao atualizar usuário", description: error.message, variant: "destructive" });
+    },
+  });
+
   const resetPassword = useMutation({
     mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
       const { data: session } = await supabase.auth.getSession();
@@ -438,6 +485,33 @@ const Admin = () => {
     setSelectedProfileId(existingPermission?.profile_id || "");
     setIsPermissionDialogOpen(true);
   };
+
+  const openEditUserDialog = (userId: string) => {
+    const userRole = userRolesWithProfiles.find((r) => r.user_id === userId);
+    const existingPermission = userPermissions.find((up) => up.user_id === userId);
+    setSelectedUserId(userId);
+    setEditUserForm({
+      name: userRole?.profile?.name || "",
+      role: userRole?.role || "supervisor",
+      permissionProfileId: existingPermission?.profile_id || "",
+    });
+    setIsEditUserDialogOpen(true);
+  };
+
+  const handleEditUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editUserForm.name.trim()) {
+      toast({ title: "Nome é obrigatório", variant: "destructive" });
+      return;
+    }
+    updateUser.mutate({
+      userId: selectedUserId,
+      name: editUserForm.name,
+      role: editUserForm.role,
+      permissionProfileId: editUserForm.permissionProfileId || undefined,
+    });
+  };
+
 
   const supervisors = userRolesWithProfiles.filter((r) => r.role === "supervisor");
   const usersWithoutRole = profiles.filter(
@@ -645,17 +719,15 @@ const Admin = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          {role.role !== "admin" && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              className="gap-2"
-                              onClick={() => openPermissionDialog(role.user_id)}
-                            >
-                              <Settings className="h-4 w-4" />
-                              Permissões
-                            </Button>
-                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => openEditUserDialog(role.user_id)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Editar
+                          </Button>
                           <Button 
                             variant="ghost" 
                             size="sm"
@@ -719,6 +791,73 @@ const Admin = () => {
                   </Button>
                   <Button type="submit" disabled={resetPassword.isPending}>
                     Alterar Senha
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit User Dialog */}
+          <Dialog open={isEditUserDialogOpen} onOpenChange={setIsEditUserDialogOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Editar Usuário</DialogTitle>
+                <DialogDescription>
+                  Altere os dados do usuário
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleEditUser} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Nome</Label>
+                  <Input
+                    value={editUserForm.name}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, name: e.target.value })}
+                    placeholder="Nome completo"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Função</Label>
+                  <Select 
+                    value={editUserForm.role} 
+                    onValueChange={(value: AppRole) => setEditUserForm({ ...editUserForm, role: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">Administrador</SelectItem>
+                      <SelectItem value="gestor">Gestor</SelectItem>
+                      <SelectItem value="supervisor">Supervisor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {editUserForm.role !== "admin" && (
+                  <div className="space-y-2">
+                    <Label>Perfil de Permissão</Label>
+                    <Select 
+                      value={editUserForm.permissionProfileId} 
+                      onValueChange={(value) => setEditUserForm({ ...editUserForm, permissionProfileId: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um perfil" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Nenhum</SelectItem>
+                        {permissionProfiles.map((pp) => (
+                          <SelectItem key={pp.id} value={pp.id}>
+                            {pp.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button type="button" variant="outline" onClick={() => setIsEditUserDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={updateUser.isPending}>
+                    Salvar
                   </Button>
                 </div>
               </form>
