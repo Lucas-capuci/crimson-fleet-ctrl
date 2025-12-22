@@ -15,7 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Play, Check, X, ChevronLeft, ChevronRight, Calendar, Clock, Users, Pencil } from "lucide-react";
+import { Play, Check, X, ChevronLeft, ChevronRight, Calendar, Clock, Users, Pencil, AlertCircle } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn, formatBoolean } from "@/lib/exportCsv";
 
@@ -23,7 +23,14 @@ interface Team {
   id: string;
   name: string;
   type: string;
+  show_in_departures: boolean;
   vehicles: { plate: string; model: string } | null;
+}
+
+interface TeamSchedule {
+  team_id: string;
+  is_working: boolean;
+  observation: string | null;
 }
 
 interface Departure {
@@ -67,18 +74,48 @@ const Departures = () => {
     no_departure_reason: "",
   });
 
-  // Fetch teams for supervisor wizard
-  const { data: teams = [] } = useQuery({
-    queryKey: ["supervisor_teams"],
+  // Fetch teams for supervisor wizard (only those with show_in_departures = true)
+  const { data: allTeams = [] } = useQuery({
+    queryKey: ["supervisor_teams_departures"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("teams")
-        .select("id, name, type, vehicles(plate, model)")
+        .select("id, name, type, show_in_departures, vehicles(plate, model)")
         .order("name");
       if (error) throw error;
       return data as Team[];
     },
     enabled: !isAdmin,
+  });
+
+  // Fetch team schedules for the selected date
+  const { data: teamSchedules = [] } = useQuery({
+    queryKey: ["team_schedules_for_date", selectedDate],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("team_schedules")
+        .select("team_id, is_working, observation")
+        .eq("date", selectedDate);
+      if (error) throw error;
+      return data as TeamSchedule[];
+    },
+    enabled: !isAdmin,
+  });
+
+  // Filter teams: only those visible in departures AND scheduled to work
+  const teams = allTeams.filter((team) => {
+    if (!team.show_in_departures) return false;
+    
+    // Check schedule - if there's no schedule entry, assume working
+    const schedule = teamSchedules.find((s) => s.team_id === team.id);
+    return schedule ? schedule.is_working : true;
+  });
+
+  // Teams that are visible but not scheduled (to show disabled)
+  const notScheduledTeams = allTeams.filter((team) => {
+    if (!team.show_in_departures) return false;
+    const schedule = teamSchedules.find((s) => s.team_id === team.id);
+    return schedule && !schedule.is_working;
   });
 
   // Fetch departures for the table
@@ -319,6 +356,27 @@ const Departures = () => {
                 Lançar Saídas ({teams.length} equipes)
               </Button>
             </div>
+            
+            {/* Show teams not scheduled for this date */}
+            {notScheduledTeams.length > 0 && (
+              <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>Equipes não escaladas para este dia:</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {notScheduledTeams.map((team) => {
+                    const schedule = teamSchedules.find((s) => s.team_id === team.id);
+                    return (
+                      <Badge key={team.id} variant="secondary" className="text-xs">
+                        {team.name}
+                        {schedule?.observation && ` - ${schedule.observation}`}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
