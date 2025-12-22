@@ -89,8 +89,8 @@ const Auth = () => {
             </div>
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold">FleetControl</CardTitle>
-            <CardDescription>Sistema de Controle de Frotas</CardDescription>
+            <CardTitle className="text-2xl font-bold">E-Grid</CardTitle>
+            <CardDescription>Sistema de gestão operacional</CardDescription>
           </div>
         </CardHeader>
         

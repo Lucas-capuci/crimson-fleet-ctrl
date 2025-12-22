@@ -81,8 +81,8 @@ export function Sidebar() {
               <Truck className="h-6 w-6 text-sidebar-foreground" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-sidebar-foreground">FleetControl</h1>
-              <p className="text-xs text-sidebar-foreground/70">Sistema de Frotas</p>
+              <h1 className="text-lg font-bold text-sidebar-foreground">E-Grid</h1>
+              <p className="text-xs text-sidebar-foreground/70">Gestão Operacional</p>
             </div>
           </div>
 
