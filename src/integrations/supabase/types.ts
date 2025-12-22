@@ -257,6 +257,65 @@ export type Database = {
           },
         ]
       }
+      permission_profiles: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_system: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_system?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_system?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profile_permissions: {
+        Row: {
+          action: Database["public"]["Enums"]["permission_action"]
+          created_at: string
+          id: string
+          page: string
+          profile_id: string
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["permission_action"]
+          created_at?: string
+          id?: string
+          page: string
+          profile_id: string
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["permission_action"]
+          created_at?: string
+          id?: string
+          page?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_permissions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "permission_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -358,6 +417,7 @@ export type Database = {
           has_basket: boolean
           id: string
           name: string
+          show_in_departures: boolean
           type: Database["public"]["Enums"]["team_type"]
           updated_at: string
         }
@@ -367,6 +427,7 @@ export type Database = {
           has_basket?: boolean
           id?: string
           name: string
+          show_in_departures?: boolean
           type: Database["public"]["Enums"]["team_type"]
           updated_at?: string
         }
@@ -376,10 +437,70 @@ export type Database = {
           has_basket?: boolean
           id?: string
           name?: string
+          show_in_departures?: boolean
           type?: Database["public"]["Enums"]["team_type"]
           updated_at?: string
         }
         Relationships: []
+      }
+      user_custom_permissions: {
+        Row: {
+          action: Database["public"]["Enums"]["permission_action"]
+          allowed: boolean
+          created_at: string
+          id: string
+          page: string
+          user_id: string
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["permission_action"]
+          allowed?: boolean
+          created_at?: string
+          id?: string
+          page: string
+          user_id: string
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["permission_action"]
+          allowed?: boolean
+          created_at?: string
+          id?: string
+          page?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_permissions: {
+        Row: {
+          created_at: string
+          id: string
+          profile_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          profile_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          profile_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_permissions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "permission_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -505,12 +626,21 @@ export type Database = {
         }
         Returns: boolean
       }
+      user_has_permission: {
+        Args: {
+          _action: Database["public"]["Enums"]["permission_action"]
+          _page: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "supervisor"
       incident_severity: "baixa" | "media" | "alta" | "critica"
       incident_type: "multa" | "acidente" | "incidente" | "observacao"
       maintenance_status: "pendente" | "em_andamento" | "concluida"
+      permission_action: "view" | "create" | "edit" | "delete" | "export"
       team_type:
         | "linha_viva"
         | "linha_morta"
@@ -654,6 +784,7 @@ export const Constants = {
       incident_severity: ["baixa", "media", "alta", "critica"],
       incident_type: ["multa", "acidente", "incidente", "observacao"],
       maintenance_status: ["pendente", "em_andamento", "concluida"],
+      permission_action: ["view", "create", "edit", "delete", "export"],
       team_type: [
         "linha_viva",
         "linha_morta",

@@ -43,6 +43,7 @@ interface Team {
   type: TeamType;
   has_basket: boolean;
   cost_center: string | null;
+  show_in_departures: boolean;
   created_at: string;
 }
 
@@ -82,6 +83,7 @@ const Teams = () => {
     cost_center: "",
     supervisor_id: "",
     vehicle_id: "",
+    show_in_departures: true,
   });
 
   const { data: teams = [], isLoading } = useQuery({
@@ -143,7 +145,7 @@ const Teams = () => {
   });
 
   const createTeam = useMutation({
-    mutationFn: async (data: { name: string; type: TeamType; has_basket: boolean; cost_center: string; supervisor_id: string; vehicle_id: string }) => {
+    mutationFn: async (data: { name: string; type: TeamType; has_basket: boolean; cost_center: string; supervisor_id: string; vehicle_id: string; show_in_departures: boolean }) => {
       const { cost_center, supervisor_id, vehicle_id, ...teamData } = data;
       const { data: newTeam, error } = await supabase
         .from("teams")
@@ -182,7 +184,7 @@ const Teams = () => {
   });
 
   const updateTeam = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { name: string; type: TeamType; has_basket: boolean; cost_center: string; supervisor_id: string; vehicle_id: string } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { name: string; type: TeamType; has_basket: boolean; cost_center: string; supervisor_id: string; vehicle_id: string; show_in_departures: boolean } }) => {
       const { cost_center, supervisor_id, vehicle_id, ...teamData } = data;
       const { error } = await supabase
         .from("teams")
@@ -279,6 +281,7 @@ const Teams = () => {
       cost_center: team.cost_center || "",
       supervisor_id: assignment?.supervisor_id || "",
       vehicle_id: linkedVehicle?.id || "",
+      show_in_departures: team.show_in_departures,
     });
     setIsDialogOpen(true);
   };
@@ -290,7 +293,7 @@ const Teams = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: "", type: "linha_viva", has_basket: false, cost_center: "", supervisor_id: "", vehicle_id: "" });
+    setFormData({ name: "", type: "linha_viva", has_basket: false, cost_center: "", supervisor_id: "", vehicle_id: "", show_in_departures: true });
     setEditingTeam(null);
     setIsDialogOpen(false);
   };
@@ -465,6 +468,16 @@ const Teams = () => {
                   <Label htmlFor="has_basket" className="cursor-pointer flex items-center gap-2">
                     <Truck className="h-4 w-4" />
                     Possui Cesto Aéreo
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="show_in_departures"
+                    checked={formData.show_in_departures}
+                    onCheckedChange={(checked) => setFormData({ ...formData, show_in_departures: checked === true })}
+                  />
+                  <Label htmlFor="show_in_departures" className="cursor-pointer">
+                    Exibir no lançamento de saídas
                   </Label>
                 </div>
                 <div className="flex justify-end gap-3 pt-4">
