@@ -7,7 +7,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/integrations/supabase/client";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CheckCircle2, XCircle, Clock, TrendingUp, Users } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, TrendingUp, Users, Copy } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn, formatBoolean } from "@/lib/exportCsv";
 
@@ -217,6 +219,91 @@ export function DeparturesOverview() {
         avgTime,
       };
     }).sort((a, b) => a.label.localeCompare(b.label));
+  };
+
+  // Generate formatted report for clipboard
+  const generateReport = (day: DailyStats): string => {
+    const dateFormatted = format(new Date(day.date + "T12:00:00"), "dd/MM/yyyy").toUpperCase();
+    const teamTypeStats = getTeamTypeStats(day.departures);
+    
+    // Group by category (OBRAS = linha_morta_obras, MANUTENÇÃO = linha_morta + linha_viva, PODA, RECOLHA)
+    const obrasLinhaMorta = teamTypeStats.find(s => s.type === "linha_morta_obras");
+    const obrasLinhaViva = day.departures.filter(d => d.teams?.type === "linha_viva" && d.teams?.name?.includes("OBRAS"));
+    
+    const manutLinhaMorta = teamTypeStats.find(s => s.type === "linha_morta");
+    const manutLinhaViva = teamTypeStats.find(s => s.type === "linha_viva");
+    const poda = teamTypeStats.find(s => s.type === "poda");
+    const recolha = teamTypeStats.find(s => s.type === "recolha");
+    
+    const getEmoji = (percentage: number) => percentage === 100 ? "🟢" : "🔴";
+    
+    const getTeamDetails = (departures: DepartureRecord[], filterType: string) => {
+      return departures
+        .filter(d => d.teams?.type === filterType && !d.departed)
+        .map(d => `${d.teams?.name} - ${d.no_departure_reason || "SEM MOTIVO"}`)
+        .join("\n");
+    };
+    
+    let report = `*ABERTURA DE TURNOS ${dateFormatted}*\n\n`;
+    
+    // OBRAS section (linha_morta_obras)
+    if (obrasLinhaMorta && obrasLinhaMorta.total > 0) {
+      report += `OBRAS\n\n`;
+      report += `${getEmoji(obrasLinhaMorta.percentage)}LINHA MORTA - ${obrasLinhaMorta.departed.toString().padStart(2, "0")}/${obrasLinhaMorta.total.toString().padStart(2, "0")} - ${obrasLinhaMorta.percentage}%\n`;
+      const obrasDetails = getTeamDetails(day.departures, "linha_morta_obras");
+      if (obrasDetails) report += `${obrasDetails}\n`;
+      report += `\n---\n\n`;
+    }
+    
+    // MANUTENÇÃO section (linha_morta + linha_viva regular)
+    if ((manutLinhaMorta && manutLinhaMorta.total > 0) || (manutLinhaViva && manutLinhaViva.total > 0)) {
+      report += `MANUTENÇÃO\n\n`;
+      
+      if (manutLinhaMorta && manutLinhaMorta.total > 0) {
+        report += `${getEmoji(manutLinhaMorta.percentage)}LINHA MORTA - ${manutLinhaMorta.departed.toString().padStart(2, "0")}/${manutLinhaMorta.total.toString().padStart(2, "0")} - ${manutLinhaMorta.percentage}%\n`;
+        const lmDetails = getTeamDetails(day.departures, "linha_morta");
+        if (lmDetails) report += `${lmDetails}\n`;
+      }
+      
+      if (manutLinhaViva && manutLinhaViva.total > 0) {
+        report += `${getEmoji(manutLinhaViva.percentage)}LINHA VIVA - ${manutLinhaViva.departed.toString().padStart(2, "0")}/${manutLinhaViva.total.toString().padStart(2, "0")} - ${manutLinhaViva.percentage}%\n`;
+        const lvDetails = getTeamDetails(day.departures, "linha_viva");
+        if (lvDetails) report += `${lvDetails}\n`;
+      }
+      
+      report += `\n---\n\n`;
+    }
+    
+    // PODA section
+    if (poda && poda.total > 0) {
+      report += `PODA\n\n`;
+      report += `${getEmoji(poda.percentage)}LINHA VIVA - ${poda.departed.toString().padStart(2, "0")}/${poda.total.toString().padStart(2, "0")} - ${poda.percentage}%\n`;
+      const podaDetails = getTeamDetails(day.departures, "poda");
+      if (podaDetails) report += `${podaDetails}\n`;
+      report += `\n---\n\n`;
+    }
+    
+    // RECOLHA section
+    if (recolha && recolha.total > 0) {
+      report += `RECOLHA\n\n`;
+      report += `${getEmoji(recolha.percentage)}${recolha.departed.toString().padStart(2, "0")}/${recolha.total.toString().padStart(2, "0")} - ${recolha.percentage}%\n`;
+      const recolhaDetails = getTeamDetails(day.departures, "recolha");
+      if (recolhaDetails) report += `${recolhaDetails}\n`;
+    }
+    
+    return report.trim();
+  };
+
+  const copyReportToClipboard = async () => {
+    if (!selectedDay) return;
+    
+    const report = generateReport(selectedDay);
+    try {
+      await navigator.clipboard.writeText(report);
+      toast.success("Relatório copiado para a área de transferência!");
+    } catch (error) {
+      toast.error("Erro ao copiar relatório");
+    }
   };
 
   // Overall stats
@@ -450,13 +537,24 @@ export function DeparturesOverview() {
                     <span className="text-2xl font-bold text-foreground">{selectedDay.percentage}%</span>
                     <span className="text-muted-foreground ml-2">({selectedDay.departed}/{selectedDay.total})</span>
                   </div>
-                  {selectedDay.avgTime && (
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-primary" />
-                      <span className="text-lg font-semibold text-primary">{selectedDay.avgTime}</span>
-                      <span className="text-sm text-muted-foreground">tempo médio</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-4">
+                    {selectedDay.avgTime && (
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-primary" />
+                        <span className="text-lg font-semibold text-primary">{selectedDay.avgTime}</span>
+                        <span className="text-sm text-muted-foreground">tempo médio</span>
+                      </div>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={copyReportToClipboard}
+                      className="flex items-center gap-2"
+                    >
+                      <Copy className="h-4 w-4" />
+                      Copiar Relatório
+                    </Button>
+                  </div>
                 </div>
               </div>
 
