@@ -29,12 +29,15 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Plus, User, Users, Shield, Link2, Unlink, KeyRound, UserPlus } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, User, Users, Shield, Link2, Unlink, KeyRound, UserPlus, Settings, Check } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn } from "@/lib/exportCsv";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
+import { PAGE_LABELS, ACTION_LABELS, PermissionAction, PageName } from "@/hooks/usePermissions";
 
 type AppRole = "admin" | "supervisor";
 
@@ -66,6 +69,26 @@ interface SupervisorTeamWithData {
   profile: Profile | null;
 }
 
+interface PermissionProfile {
+  id: string;
+  name: string;
+  description: string | null;
+  is_system: boolean;
+}
+
+interface ProfilePermission {
+  id: string;
+  profile_id: string;
+  page: string;
+  action: string;
+}
+
+interface UserPermission {
+  id: string;
+  user_id: string;
+  profile_id: string | null;
+}
+
 const newUserSchema = z.object({
   name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),
   username: z.string().min(3, "Usuário deve ter no mínimo 3 caracteres").regex(/^[a-z0-9._]+$/, "Use apenas letras minúsculas, números, pontos e underscores"),
@@ -73,15 +96,20 @@ const newUserSchema = z.object({
   role: z.enum(["admin", "supervisor"]),
 });
 
+const PAGES: PageName[] = ["dashboard", "vehicles", "drivers", "teams", "departures", "maintenance", "incidents", "schedule", "workshop", "admin"];
+const ACTIONS: PermissionAction[] = ["view", "create", "edit", "delete", "export"];
+
 const Admin = () => {
   const queryClient = useQueryClient();
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [isTeamDialogOpen, setIsTeamDialogOpen] = useState(false);
   const [isNewUserDialogOpen, setIsNewUserDialogOpen] = useState(false);
   const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
+  const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedRole, setSelectedRole] = useState<AppRole>("supervisor");
   const [selectedTeamId, setSelectedTeamId] = useState("");
+  const [selectedProfileId, setSelectedProfileId] = useState("");
   const [newUserForm, setNewUserForm] = useState({ name: "", username: "", password: "", role: "supervisor" as AppRole });
   const [newPassword, setNewPassword] = useState("");
   const [resetPasswordUserId, setResetPasswordUserId] = useState("");
@@ -154,6 +182,43 @@ const Admin = () => {
         profile: profilesMap.get(st.supervisor_id) || null,
         team: teamsMap.get(st.team_id) || null,
       })) as SupervisorTeamWithData[];
+    },
+  });
+
+  // Permission profiles
+  const { data: permissionProfiles = [] } = useQuery({
+    queryKey: ["permission_profiles"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("permission_profiles")
+        .select("*")
+        .order("name");
+      if (error) throw error;
+      return data as PermissionProfile[];
+    },
+  });
+
+  // Profile permissions
+  const { data: profilePermissions = [] } = useQuery({
+    queryKey: ["profile_permissions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profile_permissions")
+        .select("*");
+      if (error) throw error;
+      return data as ProfilePermission[];
+    },
+  });
+
+  // User permissions (which profile each user has)
+  const { data: userPermissions = [] } = useQuery({
+    queryKey: ["user_permissions_all"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_permissions")
+        .select("*");
+      if (error) throw error;
+      return data as UserPermission[];
     },
   });
 
@@ -269,6 +334,37 @@ const Admin = () => {
     },
   });
 
+  // Assign permission profile to user
+  const assignPermissionProfile = useMutation({
+    mutationFn: async ({ userId, profileId }: { userId: string; profileId: string }) => {
+      // Check if user already has a permission
+      const existing = userPermissions.find((up) => up.user_id === userId);
+      
+      if (existing) {
+        const { error } = await supabase
+          .from("user_permissions")
+          .update({ profile_id: profileId })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("user_permissions")
+          .insert({ user_id: userId, profile_id: profileId });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user_permissions_all"] });
+      toast({ title: "Perfil de permissão atribuído!" });
+      setIsPermissionDialogOpen(false);
+      setSelectedUserId("");
+      setSelectedProfileId("");
+    },
+    onError: (error) => {
+      toast({ title: "Erro ao atribuir perfil", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
@@ -303,10 +399,31 @@ const Admin = () => {
     setIsResetPasswordDialogOpen(true);
   };
 
+  const openPermissionDialog = (userId: string) => {
+    setSelectedUserId(userId);
+    const existingPermission = userPermissions.find((up) => up.user_id === userId);
+    setSelectedProfileId(existingPermission?.profile_id || "");
+    setIsPermissionDialogOpen(true);
+  };
+
   const supervisors = userRolesWithProfiles.filter((r) => r.role === "supervisor");
   const usersWithoutRole = profiles.filter(
     (p) => !userRolesWithProfiles.some((r) => r.user_id === p.id)
   );
+
+  // Get user's permission profile name
+  const getUserPermissionProfile = (userId: string) => {
+    const userPerm = userPermissions.find((up) => up.user_id === userId);
+    if (!userPerm?.profile_id) return null;
+    return permissionProfiles.find((pp) => pp.id === userPerm.profile_id);
+  };
+
+  // Check if a profile has a specific permission
+  const profileHasPermission = (profileId: string, page: string, action: string) => {
+    return profilePermissions.some(
+      (pp) => pp.profile_id === profileId && pp.page === page && pp.action === action
+    );
+  };
 
   // CSV columns for users
   const usersCsvColumns: CsvColumn[] = [
@@ -331,7 +448,7 @@ const Admin = () => {
       </div>
 
       <Tabs defaultValue="users" className="animate-fade-in">
-        <TabsList className="mb-6">
+        <TabsList className="mb-6 flex-wrap">
           <TabsTrigger value="users" className="gap-2">
             <UserPlus className="h-4 w-4" />
             Usuários
@@ -343,6 +460,10 @@ const Admin = () => {
           <TabsTrigger value="teams" className="gap-2">
             <Link2 className="h-4 w-4" />
             Vínculos de Equipes
+          </TabsTrigger>
+          <TabsTrigger value="permissions" className="gap-2">
+            <Settings className="h-4 w-4" />
+            Permissões
           </TabsTrigger>
         </TabsList>
 
@@ -431,39 +552,67 @@ const Admin = () => {
                   <TableHead>Usuário</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Função</TableHead>
+                  <TableHead>Perfil de Permissão</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {userRolesWithProfiles.map((role) => (
-                  <TableRow key={role.id} className="hover:bg-muted/30">
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <User className="h-4 w-4 text-primary" />
+                {userRolesWithProfiles.map((role) => {
+                  const permProfile = getUserPermissionProfile(role.user_id);
+                  return (
+                    <TableRow key={role.id} className="hover:bg-muted/30">
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <User className="h-4 w-4 text-primary" />
+                          </div>
+                          {role.profile?.username || "-"}
                         </div>
-                        {role.profile?.username || "-"}
-                      </div>
-                    </TableCell>
-                    <TableCell>{role.profile?.name || "Usuário"}</TableCell>
-                    <TableCell>
-                      <Badge variant={role.role === "admin" ? "default" : "secondary"}>
-                        {role.role === "admin" ? "Administrador" : "Supervisor"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        className="gap-2"
-                        onClick={() => openResetPasswordDialog(role.user_id)}
-                      >
-                        <KeyRound className="h-4 w-4" />
-                        Resetar Senha
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>{role.profile?.name || "Usuário"}</TableCell>
+                      <TableCell>
+                        <Badge variant={role.role === "admin" ? "default" : "secondary"}>
+                          {role.role === "admin" ? "Administrador" : "Supervisor"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {role.role === "admin" ? (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            Acesso Total
+                          </Badge>
+                        ) : permProfile ? (
+                          <Badge variant="outline">{permProfile.name}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Não definido</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          {role.role !== "admin" && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              className="gap-2"
+                              onClick={() => openPermissionDialog(role.user_id)}
+                            >
+                              <Settings className="h-4 w-4" />
+                              Permissões
+                            </Button>
+                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => openResetPasswordDialog(role.user_id)}
+                          >
+                            <KeyRound className="h-4 w-4" />
+                            Resetar Senha
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
             {userRolesWithProfiles.length === 0 && (
@@ -502,6 +651,46 @@ const Admin = () => {
                   </Button>
                 </div>
               </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Assign Permission Profile Dialog */}
+          <Dialog open={isPermissionDialogOpen} onOpenChange={setIsPermissionDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Atribuir Perfil de Permissão</DialogTitle>
+                <DialogDescription>
+                  Selecione o perfil de permissões para este usuário
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Perfil</Label>
+                  <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um perfil" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {permissionProfiles.map((pp) => (
+                        <SelectItem key={pp.id} value={pp.id}>
+                          {pp.name} {pp.description && `- ${pp.description}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button variant="outline" onClick={() => setIsPermissionDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button 
+                    onClick={() => assignPermissionProfile.mutate({ userId: selectedUserId, profileId: selectedProfileId })}
+                    disabled={!selectedProfileId || assignPermissionProfile.isPending}
+                  >
+                    Atribuir
+                  </Button>
+                </div>
+              </div>
             </DialogContent>
           </Dialog>
         </TabsContent>
@@ -733,6 +922,70 @@ const Admin = () => {
                 Nenhum vínculo configurado
               </div>
             )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="permissions">
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold mb-2">Perfis de Permissão</h2>
+            <p className="text-muted-foreground text-sm">
+              Visualize os perfis de permissão disponíveis e suas configurações
+            </p>
+          </div>
+
+          <div className="grid gap-6">
+            {permissionProfiles.map((profile) => (
+              <Card key={profile.id}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Shield className="h-5 w-5 text-primary" />
+                        {profile.name}
+                        {profile.is_system && (
+                          <Badge variant="secondary" className="text-xs">Sistema</Badge>
+                        )}
+                      </CardTitle>
+                      {profile.description && (
+                        <CardDescription>{profile.description}</CardDescription>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-40">Página</TableHead>
+                          {ACTIONS.map((action) => (
+                            <TableHead key={action} className="text-center w-24">
+                              {ACTION_LABELS[action]}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {PAGES.map((page) => (
+                          <TableRow key={page}>
+                            <TableCell className="font-medium">{PAGE_LABELS[page]}</TableCell>
+                            {ACTIONS.map((action) => (
+                              <TableCell key={action} className="text-center">
+                                {profileHasPermission(profile.id, page, action) ? (
+                                  <Check className="h-4 w-4 text-green-600 mx-auto" />
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </TabsContent>
       </Tabs>
