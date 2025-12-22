@@ -153,6 +153,43 @@ Deno.serve(async (req) => {
       )
     }
 
+    if (action === 'delete') {
+      const { userId } = data
+
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ error: 'ID do usuário é obrigatório' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Prevent deleting yourself
+      if (userId === requestingUser.id) {
+        return new Response(
+          JSON.stringify({ error: 'Você não pode excluir seu próprio usuário' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Delete user from auth (cascade will handle related tables)
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
+
+      if (error) {
+        console.error('Delete user error:', error)
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      console.log('User deleted:', userId)
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     return new Response(
       JSON.stringify({ error: 'Ação inválida' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -31,7 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, User, Users, Shield, Link2, Unlink, KeyRound, UserPlus, Settings, Check } from "lucide-react";
+import { Plus, User, Users, Shield, Link2, Unlink, KeyRound, UserPlus, Settings, Check, Trash2 } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn } from "@/lib/exportCsv";
 import { toast } from "@/hooks/use-toast";
@@ -110,7 +110,7 @@ const Admin = () => {
   const [selectedRole, setSelectedRole] = useState<AppRole>("supervisor");
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [selectedProfileId, setSelectedProfileId] = useState("");
-  const [newUserForm, setNewUserForm] = useState({ name: "", username: "", password: "", role: "supervisor" as AppRole });
+  const [newUserForm, setNewUserForm] = useState({ name: "", username: "", password: "", role: "supervisor" as AppRole, permissionProfileId: "" });
   const [newPassword, setNewPassword] = useState("");
   const [resetPasswordUserId, setResetPasswordUserId] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -287,12 +287,46 @@ const Admin = () => {
   });
 
   const createUser = useMutation({
-    mutationFn: async (data: { name: string; username: string; password: string; role: AppRole }) => {
+    mutationFn: async (data: { name: string; username: string; password: string; role: AppRole; permissionProfileId?: string }) => {
       const { data: session } = await supabase.auth.getSession();
       if (!session.session) throw new Error("Não autenticado");
 
       const response = await supabase.functions.invoke("manage-users", {
-        body: { action: "create", ...data },
+        body: { action: "create", name: data.name, username: data.username, password: data.password, role: data.role },
+      });
+
+      if (response.error) throw new Error(response.error.message);
+      if (response.data?.error) throw new Error(response.data.error);
+
+      // If a permission profile was selected, assign it
+      if (data.permissionProfileId && response.data?.userId) {
+        const { error: permError } = await supabase
+          .from("user_permissions")
+          .insert({ user_id: response.data.userId, profile_id: data.permissionProfileId });
+        if (permError) console.error("Error assigning permission profile:", permError);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all_profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["user_roles_with_profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["user_permissions_all"] });
+      toast({ title: "Usuário criado com sucesso!" });
+      setIsNewUserDialogOpen(false);
+      setNewUserForm({ name: "", username: "", password: "", role: "supervisor", permissionProfileId: "" });
+      setErrors({});
+    },
+    onError: (error) => {
+      toast({ title: "Erro ao criar usuário", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteUser = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) throw new Error("Não autenticado");
+
+      const response = await supabase.functions.invoke("manage-users", {
+        body: { action: "delete", userId },
       });
 
       if (response.error) throw new Error(response.error.message);
@@ -301,13 +335,12 @@ const Admin = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["all_profiles"] });
       queryClient.invalidateQueries({ queryKey: ["user_roles_with_profiles"] });
-      toast({ title: "Usuário criado com sucesso!" });
-      setIsNewUserDialogOpen(false);
-      setNewUserForm({ name: "", username: "", password: "", role: "supervisor" });
-      setErrors({});
+      queryClient.invalidateQueries({ queryKey: ["user_permissions_all"] });
+      queryClient.invalidateQueries({ queryKey: ["supervisor_teams_with_data"] });
+      toast({ title: "Usuário excluído com sucesso!" });
     },
     onError: (error) => {
-      toast({ title: "Erro ao criar usuário", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao excluir usuário", description: error.message, variant: "destructive" });
     },
   });
 
@@ -531,6 +564,29 @@ const Admin = () => {
                       </SelectContent>
                     </Select>
                   </div>
+                  {newUserForm.role === "supervisor" && (
+                    <div className="space-y-2">
+                      <Label>Perfil de Permissão</Label>
+                      <Select 
+                        value={newUserForm.permissionProfileId} 
+                        onValueChange={(v) => setNewUserForm({ ...newUserForm, permissionProfileId: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione um perfil (opcional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {permissionProfiles.map((pp) => (
+                            <SelectItem key={pp.id} value={pp.id}>
+                              {pp.name} {pp.description && `- ${pp.description}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Define quais páginas o usuário poderá visualizar
+                      </p>
+                    </div>
+                  )}
                   <div className="flex justify-end gap-3 pt-4">
                     <Button type="button" variant="outline" onClick={() => setIsNewUserDialogOpen(false)}>
                       Cancelar
@@ -607,6 +663,20 @@ const Admin = () => {
                           >
                             <KeyRound className="h-4 w-4" />
                             Resetar Senha
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            className="gap-2 text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (confirm(`Tem certeza que deseja excluir o usuário ${role.profile?.name || role.profile?.username}?`)) {
+                                deleteUser.mutate(role.user_id);
+                              }
+                            }}
+                            disabled={deleteUser.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Excluir
                           </Button>
                         </div>
                       </TableCell>
