@@ -118,6 +118,34 @@ export default function Schedule() {
     );
   }, [supervisorTeams, profiles]);
 
+  // Generate CSV data for schedule export
+  const getScheduleCsvData = () => {
+    const data: any[] = [];
+    filteredTeams.forEach(team => {
+      daysInMonth.forEach(day => {
+        const dateStr = format(day, "yyyy-MM-dd");
+        const schedule = schedules.find(s => s.team_id === team.id && s.date === dateStr);
+        data.push({
+          team: team.name,
+          type: team.type,
+          date: dateStr,
+          is_working: schedule?.is_working ?? true,
+          observation: schedule?.observation || "",
+        });
+      });
+    });
+    return data;
+  };
+
+  // CSV columns for schedule
+  const scheduleCsvColumns: CsvColumn[] = [
+    { key: "team", header: "Equipe" },
+    { key: "type", header: "Tipo" },
+    { key: "date", header: "Data", format: (v) => formatDate(v) },
+    { key: "is_working", header: "Status", format: (v) => formatBoolean(v, "Trabalho", "Folga") },
+    { key: "observation", header: "Observação" },
+  ];
+
   // Fetch schedules for the month
   const { data: schedules = [] } = useQuery({
     queryKey: ["schedules", format(currentDate, "yyyy-MM")],
@@ -350,6 +378,11 @@ export default function Schedule() {
               <span className="sm:hidden">Equipe</span>
             </TabsTrigger>
           </TabsList>
+          <ExportButton
+            data={getScheduleCsvData()}
+            filename={`escala-${format(currentDate, "yyyy-MM")}`}
+            columns={scheduleCsvColumns}
+          />
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="mt-4">

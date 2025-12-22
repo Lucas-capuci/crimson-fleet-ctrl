@@ -308,6 +308,21 @@ const Admin = () => {
     (p) => !userRolesWithProfiles.some((r) => r.user_id === p.id)
   );
 
+  // CSV columns for users
+  const usersCsvColumns: CsvColumn[] = [
+    { key: "profile", header: "Usuário", format: (v) => v?.username || "-" },
+    { key: "profile", header: "Nome", format: (v) => v?.name || "-" },
+    { key: "profile", header: "Email", format: (v) => v?.email || "-" },
+    { key: "role", header: "Função", format: (v) => v === "admin" ? "Administrador" : "Supervisor" },
+  ];
+
+  // CSV columns for supervisor-team links
+  const supervisorTeamsCsvColumns: CsvColumn[] = [
+    { key: "profile", header: "Supervisor", format: (v) => v?.name || "-" },
+    { key: "team", header: "Equipe", format: (v) => v?.name || "-" },
+    { key: "team", header: "Tipo", format: (v) => v?.type || "-" },
+  ];
+
   return (
     <MainLayout>
       <div className="mb-8 animate-fade-in">
@@ -334,7 +349,13 @@ const Admin = () => {
         <TabsContent value="users">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold">Cadastro de Usuários</h2>
-            <Dialog open={isNewUserDialogOpen} onOpenChange={setIsNewUserDialogOpen}>
+            <div className="flex gap-2">
+              <ExportButton
+                data={userRolesWithProfiles}
+                filename={`usuarios-${new Date().toISOString().split('T')[0]}`}
+                columns={usersCsvColumns}
+              />
+              <Dialog open={isNewUserDialogOpen} onOpenChange={setIsNewUserDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="gap-2">
                   <Plus className="h-4 w-4" />
@@ -400,6 +421,7 @@ const Admin = () => {
                 </form>
               </DialogContent>
             </Dialog>
+            </div>
           </div>
 
           <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -597,7 +619,13 @@ const Admin = () => {
         <TabsContent value="teams">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold">Supervisores e Equipes</h2>
-            <Dialog open={isTeamDialogOpen} onOpenChange={setIsTeamDialogOpen}>
+            <div className="flex gap-2">
+              <ExportButton
+                data={supervisorTeamsWithData}
+                filename={`vinculos-supervisor-equipe-${new Date().toISOString().split('T')[0]}`}
+                columns={supervisorTeamsCsvColumns}
+              />
+              <Dialog open={isTeamDialogOpen} onOpenChange={setIsTeamDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="gap-2">
                   <Plus className="h-4 w-4" />
@@ -656,6 +684,7 @@ const Admin = () => {
                 </div>
               </DialogContent>
             </Dialog>
+            </div>
           </div>
 
           <div className="bg-card rounded-xl border border-border overflow-hidden">

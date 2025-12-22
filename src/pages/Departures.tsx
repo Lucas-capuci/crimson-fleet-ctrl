@@ -114,6 +114,17 @@ const Departures = () => {
     },
   });
 
+  // CSV columns for departures
+  const departuresCsvColumns: CsvColumn[] = [
+    { key: "date", header: "Data", format: (v) => format(new Date(v + "T12:00:00"), "dd/MM/yyyy") },
+    { key: "teams", header: "Equipe", format: (v) => v?.name || "-" },
+    { key: "teams", header: "Tipo", format: (v) => v?.type || "-" },
+    { key: "supervisorName", header: "Supervisor" },
+    { key: "departed", header: "Status", format: (v) => formatBoolean(v, "Saiu", "Não Saiu") },
+    { key: "departure_time", header: "Horário", format: (v) => v || "-" },
+    { key: "no_departure_reason", header: "Motivo", format: (v) => v || "-" },
+  ];
+
   // Fetch supervisors for admin filter
   const { data: supervisors = [] } = useQuery({
     queryKey: ["supervisors_list"],
@@ -350,11 +361,16 @@ const Departures = () => {
 
       {/* Departures Table */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
             Lançamentos - {format(new Date(filterDate + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR })}
           </CardTitle>
+          <ExportButton
+            data={departures}
+            filename={`saidas-${filterDate}`}
+            columns={departuresCsvColumns}
+          />
         </CardHeader>
         <CardContent>
           {isLoading ? (
