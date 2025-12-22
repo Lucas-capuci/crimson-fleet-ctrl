@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 interface StatsCardProps {
   title: string;
@@ -10,6 +11,7 @@ interface StatsCardProps {
     isPositive: boolean;
   };
   variant?: "default" | "primary" | "success" | "warning" | "destructive";
+  href?: string;
 }
 
 const variantStyles = {
@@ -34,14 +36,25 @@ export function StatsCard({
   icon: Icon,
   trend,
   variant = "default",
+  href,
 }: StatsCardProps) {
+  const navigate = useNavigate();
   const isColored = variant !== "default";
+  const isClickable = !!href;
+
+  const handleClick = () => {
+    if (href) {
+      navigate(href);
+    }
+  };
 
   return (
     <div
+      onClick={handleClick}
       className={cn(
         "rounded-xl p-6 card-hover animate-fade-in",
-        variantStyles[variant]
+        variantStyles[variant],
+        isClickable && "cursor-pointer hover:scale-[1.02] transition-transform"
       )}
     >
       <div className="flex items-start justify-between">

@@ -70,6 +70,7 @@ const Dashboard = () => {
           value={vehicleStats?.inMaintenance ?? 0}
           icon={Wrench}
           variant="warning"
+          href="/workshop"
         />
         <StatsCard
           title="Motoristas Ativos"
