@@ -379,6 +379,8 @@ export type Database = {
           id: string
           is_working: boolean
           observation: string | null
+          scheduled_entry_time: string
+          scheduled_exit_time: string
           team_id: string
           updated_at: string
         }
@@ -388,6 +390,8 @@ export type Database = {
           id?: string
           is_working?: boolean
           observation?: string | null
+          scheduled_entry_time?: string
+          scheduled_exit_time?: string
           team_id: string
           updated_at?: string
         }
@@ -397,6 +401,8 @@ export type Database = {
           id?: string
           is_working?: boolean
           observation?: string | null
+          scheduled_entry_time?: string
+          scheduled_exit_time?: string
           team_id?: string
           updated_at?: string
         }

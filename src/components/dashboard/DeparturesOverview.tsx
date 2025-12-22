@@ -27,9 +27,10 @@ interface DepartureRecord {
   departed: boolean;
   departure_time: string | null;
   no_departure_reason: string | null;
-  teams: { name: string; type: string } | null;
+  teams: { id: string; name: string; type: string } | null;
   supervisorName: string;
   date: string;
+  scheduled_entry_time?: string;
 }
 
 interface DailyStats {
@@ -38,7 +39,7 @@ interface DailyStats {
   percentage: number;
   departed: number;
   total: number;
-  avgTime: string | null;
+  avgDelayMinutes: number | null;
   departures: DepartureRecord[];
 }
 
@@ -48,7 +49,7 @@ interface TeamTypeStats {
   departed: number;
   total: number;
   percentage: number;
-  avgTime: string | null;
+  avgDelayMinutes: number | null;
 }
 
 export function DeparturesOverview() {
@@ -62,7 +63,7 @@ export function DeparturesOverview() {
       const startDate = format(subDays(new Date(), 7), "yyyy-MM-dd");
       const { data, error } = await supabase
         .from("departures")
-        .select(`*, teams!inner(name, type)`)
+        .select(`*, teams!inner(id, name, type)`)
         .gte("date", startDate);
       if (error) throw error;
       
@@ -74,6 +75,19 @@ export function DeparturesOverview() {
         .in("id", supervisorIds);
       
       const profilesMap = new Map(profiles?.map(p => [p.id, p.name]) || []);
+
+      // Fetch team schedules to get scheduled entry times
+      const teamIds = [...new Set(data.map(d => d.team_id))];
+      const dates = [...new Set(data.map(d => d.date))];
+      const { data: schedules } = await supabase
+        .from("team_schedules")
+        .select("team_id, date, scheduled_entry_time")
+        .in("team_id", teamIds)
+        .in("date", dates);
+
+      const scheduleMap = new Map(
+        schedules?.map(s => [`${s.team_id}-${s.date}`, s.scheduled_entry_time]) || []
+      );
       
       return data.map(d => ({
         id: d.id,
@@ -82,7 +96,8 @@ export function DeparturesOverview() {
         no_departure_reason: d.no_departure_reason,
         teams: d.teams,
         date: d.date,
-        supervisorName: profilesMap.get(d.supervisor_id) || "-"
+        supervisorName: profilesMap.get(d.supervisor_id) || "-",
+        scheduled_entry_time: scheduleMap.get(`${d.team_id}-${d.date}`) || "07:00:00"
       })) as DepartureRecord[];
     },
   });
@@ -93,7 +108,7 @@ export function DeparturesOverview() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("departures")
-        .select("id, departed, departure_time, no_departure_reason, supervisor_id, date, teams(name, type)")
+        .select("id, departed, departure_time, no_departure_reason, supervisor_id, date, team_id, teams(id, name, type)")
         .eq("date", today)
         .order("created_at", { ascending: false })
         .limit(10);
@@ -106,6 +121,18 @@ export function DeparturesOverview() {
         .in("id", supervisorIds);
       
       const profilesMap = new Map(profiles?.map(p => [p.id, p.name]) || []);
+
+      // Fetch team schedules for today
+      const teamIds = [...new Set(data.map(d => d.team_id))];
+      const { data: schedules } = await supabase
+        .from("team_schedules")
+        .select("team_id, date, scheduled_entry_time")
+        .in("team_id", teamIds)
+        .eq("date", today);
+
+      const scheduleMap = new Map(
+        schedules?.map(s => [`${s.team_id}-${s.date}`, s.scheduled_entry_time]) || []
+      );
       
       return data
         .filter(d => d.teams !== null)
@@ -116,59 +143,64 @@ export function DeparturesOverview() {
           no_departure_reason: d.no_departure_reason,
           teams: d.teams,
           date: d.date,
-          supervisorName: profilesMap.get(d.supervisor_id) || "-"
+          supervisorName: profilesMap.get(d.supervisor_id) || "-",
+          scheduled_entry_time: scheduleMap.get(`${d.team_id}-${d.date}`) || "07:00:00"
         })) as DepartureRecord[];
     },
   });
 
-  // Calculate average departure time by team type
-  const avgTimeByType = weeklyDepartures?.reduce((acc, dep) => {
+  // Helper function to calculate delay in minutes
+  const calculateDelayMinutes = (departureTime: string, scheduledTime: string = "07:00:00"): number => {
+    const [depHours, depMinutes] = departureTime.split(":").map(Number);
+    const [schHours, schMinutes] = scheduledTime.split(":").map(Number);
+    const depTotalMinutes = depHours * 60 + depMinutes;
+    const schTotalMinutes = schHours * 60 + schMinutes;
+    return depTotalMinutes - schTotalMinutes;
+  };
+
+  // Calculate average delay in minutes by team type
+  const avgDelayByType = weeklyDepartures?.reduce((acc, dep) => {
     if (dep.departed && dep.departure_time && dep.teams) {
       const type = dep.teams.type;
-      if (!acc[type]) acc[type] = { total: 0, count: 0 };
-      const [hours, minutes] = dep.departure_time.split(":").map(Number);
-      acc[type].total += hours * 60 + minutes;
+      if (!acc[type]) acc[type] = { totalDelay: 0, count: 0 };
+      const delay = calculateDelayMinutes(dep.departure_time, dep.scheduled_entry_time);
+      acc[type].totalDelay += delay;
       acc[type].count += 1;
     }
     return acc;
-  }, {} as Record<string, { total: number; count: number }>);
+  }, {} as Record<string, { totalDelay: number; count: number }>);
 
-  const avgTimeFormatted = Object.entries(avgTimeByType || {}).map(([type, data]) => {
-    const avgMinutes = Math.round(data.total / data.count);
-    const hours = Math.floor(avgMinutes / 60);
-    const minutes = avgMinutes % 60;
+  const avgDelayFormatted = Object.entries(avgDelayByType || {}).map(([type, data]) => {
+    const avgDelay = Math.round(data.totalDelay / data.count);
     return {
       type,
       label: teamTypeLabels[type] || type,
-      avgTime: `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`,
+      avgDelayMinutes: avgDelay,
     };
   });
 
-  // Calculate daily stats including average time
+  // Calculate daily stats including average delay
   const dailyStats = weeklyDepartures?.reduce((acc, dep) => {
     const date = dep.date;
-    if (!acc[date]) acc[date] = { total: 0, departed: 0, totalMinutes: 0, departedWithTime: 0, departures: [] };
+    if (!acc[date]) acc[date] = { total: 0, departed: 0, totalDelayMinutes: 0, departedWithTime: 0, departures: [] };
     acc[date].total += 1;
     acc[date].departures.push(dep);
     if (dep.departed) {
       acc[date].departed += 1;
       if (dep.departure_time) {
-        const [hours, minutes] = dep.departure_time.split(":").map(Number);
-        acc[date].totalMinutes += hours * 60 + minutes;
+        const delay = calculateDelayMinutes(dep.departure_time, dep.scheduled_entry_time);
+        acc[date].totalDelayMinutes += delay;
         acc[date].departedWithTime += 1;
       }
     }
     return acc;
-  }, {} as Record<string, { total: number; departed: number; totalMinutes: number; departedWithTime: number; departures: DepartureRecord[] }>);
+  }, {} as Record<string, { total: number; departed: number; totalDelayMinutes: number; departedWithTime: number; departures: DepartureRecord[] }>);
 
   const dailyPercentages: DailyStats[] = Object.entries(dailyStats || {})
     .map(([date, data]) => {
-      let avgTime: string | null = null;
+      let avgDelayMinutes: number | null = null;
       if (data.departedWithTime > 0) {
-        const avgMinutes = Math.round(data.totalMinutes / data.departedWithTime);
-        const hours = Math.floor(avgMinutes / 60);
-        const minutes = avgMinutes % 60;
-        avgTime = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+        avgDelayMinutes = Math.round(data.totalDelayMinutes / data.departedWithTime);
       }
       return {
         date,
@@ -176,7 +208,7 @@ export function DeparturesOverview() {
         percentage: data.total > 0 ? Math.round((data.departed / data.total) * 100) : 0,
         departed: data.departed,
         total: data.total,
-        avgTime,
+        avgDelayMinutes,
         departures: data.departures,
       };
     })
@@ -185,31 +217,28 @@ export function DeparturesOverview() {
 
   // Calculate team type stats for selected day
   const getTeamTypeStats = (departures: DepartureRecord[]): TeamTypeStats[] => {
-    const typeStats: Record<string, { departed: number; total: number; totalMinutes: number; departedWithTime: number }> = {};
+    const typeStats: Record<string, { departed: number; total: number; totalDelayMinutes: number; departedWithTime: number }> = {};
     
     departures.forEach(dep => {
       const type = dep.teams?.type || "unknown";
       if (!typeStats[type]) {
-        typeStats[type] = { departed: 0, total: 0, totalMinutes: 0, departedWithTime: 0 };
+        typeStats[type] = { departed: 0, total: 0, totalDelayMinutes: 0, departedWithTime: 0 };
       }
       typeStats[type].total += 1;
       if (dep.departed) {
         typeStats[type].departed += 1;
         if (dep.departure_time) {
-          const [hours, minutes] = dep.departure_time.split(":").map(Number);
-          typeStats[type].totalMinutes += hours * 60 + minutes;
+          const delay = calculateDelayMinutes(dep.departure_time, dep.scheduled_entry_time);
+          typeStats[type].totalDelayMinutes += delay;
           typeStats[type].departedWithTime += 1;
         }
       }
     });
     
     return Object.entries(typeStats).map(([type, data]) => {
-      let avgTime: string | null = null;
+      let avgDelayMinutes: number | null = null;
       if (data.departedWithTime > 0) {
-        const avgMinutes = Math.round(data.totalMinutes / data.departedWithTime);
-        const hours = Math.floor(avgMinutes / 60);
-        const minutes = avgMinutes % 60;
-        avgTime = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+        avgDelayMinutes = Math.round(data.totalDelayMinutes / data.departedWithTime);
       }
       return {
         type,
@@ -217,7 +246,7 @@ export function DeparturesOverview() {
         departed: data.departed,
         total: data.total,
         percentage: data.total > 0 ? Math.round((data.departed / data.total) * 100) : 0,
-        avgTime,
+        avgDelayMinutes,
       };
     }).sort((a, b) => a.label.localeCompare(b.label));
   };
@@ -415,7 +444,7 @@ export function DeparturesOverview() {
     { key: "departed", header: "Saíram" },
     { key: "total", header: "Total" },
     { key: "percentage", header: "Porcentagem", format: (v) => `${v}%` },
-    { key: "avgTime", header: "Tempo Médio", format: (v) => v || "-" },
+    { key: "avgDelayMinutes", header: "Atraso Médio (min)", format: (v) => v !== null ? `${v}` : "-" },
   ];
 
   return (
@@ -462,27 +491,27 @@ export function DeparturesOverview() {
             <Users className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">{avgTimeFormatted.length}</div>
+            <div className="text-2xl font-bold text-foreground">{avgDelayFormatted.length}</div>
             <p className="text-xs text-muted-foreground">com registros esta semana</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Average Time by Team Type */}
+      {/* Average Delay by Team Type */}
       <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Clock className="h-5 w-5 text-primary" />
-            Média de Horário de Saída por Tipo
+            Tempo Médio de Atraso por Tipo (minutos)
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {avgTimeFormatted.length > 0 ? (
+          {avgDelayFormatted.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {avgTimeFormatted.map((item) => (
+              {avgDelayFormatted.map((item) => (
                 <div key={item.type} className="p-4 rounded-lg bg-muted/50 border border-border text-center">
                   <p className="text-sm text-muted-foreground">{item.label}</p>
-                  <p className="text-xl font-bold text-foreground">{item.avgTime}</p>
+                  <p className="text-xl font-bold text-foreground">{item.avgDelayMinutes} min</p>
                 </div>
               ))}
             </div>
@@ -522,8 +551,8 @@ export function DeparturesOverview() {
                     />
                   </div>
                   <span className="text-sm font-medium text-foreground w-12 text-right">{day.percentage}%</span>
-                  <span className="text-sm font-medium text-primary w-14 text-center">
-                    {day.avgTime || "--:--"}
+                  <span className="text-sm font-medium text-primary w-16 text-center">
+                    {day.avgDelayMinutes !== null ? `${day.avgDelayMinutes} min` : "--"}
                   </span>
                   <span className="text-xs text-muted-foreground w-14">({day.departed}/{day.total})</span>
                 </div>
@@ -625,11 +654,11 @@ export function DeparturesOverview() {
                     <span className="text-muted-foreground ml-2">({selectedDay.departed}/{selectedDay.total})</span>
                   </div>
                   <div className="flex items-center gap-4">
-                    {selectedDay.avgTime && (
+                    {selectedDay.avgDelayMinutes !== null && (
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-primary" />
-                        <span className="text-lg font-semibold text-primary">{selectedDay.avgTime}</span>
-                        <span className="text-sm text-muted-foreground">tempo médio</span>
+                        <span className="text-lg font-semibold text-primary">{selectedDay.avgDelayMinutes} min</span>
+                        <span className="text-sm text-muted-foreground">atraso médio</span>
                       </div>
                     )}
                     <div className="flex items-center gap-2">
@@ -668,7 +697,7 @@ export function DeparturesOverview() {
                       <TableHead>Tipo</TableHead>
                       <TableHead className="text-center">Saíram</TableHead>
                       <TableHead className="text-center">%</TableHead>
-                      <TableHead className="text-center">Média</TableHead>
+                      <TableHead className="text-center">Atraso Médio</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -682,7 +711,7 @@ export function DeparturesOverview() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center text-primary font-medium">
-                          {stat.avgTime || "--:--"}
+                          {stat.avgDelayMinutes !== null ? `${stat.avgDelayMinutes} min` : "--"}
                         </TableCell>
                       </TableRow>
                     ))}

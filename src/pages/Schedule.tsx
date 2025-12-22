@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { ChevronLeft, ChevronRight, Check, X, MessageSquare, Calendar, Users, LayoutGrid, Filter } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ChevronLeft, ChevronRight, Check, X, MessageSquare, Calendar, Users, LayoutGrid, Filter, Clock } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn, formatDate, formatBoolean } from "@/lib/exportCsv";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, getDay } from "date-fns";
@@ -25,6 +26,8 @@ type ScheduleRecord = {
   date: string;
   is_working: boolean;
   observation: string | null;
+  scheduled_entry_time: string;
+  scheduled_exit_time: string;
 };
 
 type Team = {
@@ -162,19 +165,44 @@ export default function Schedule() {
 
   // Mutation for creating/updating schedule
   const scheduleMutation = useMutation({
-    mutationFn: async ({ teamId, date, isWorking, obs }: { teamId: string; date: string; isWorking: boolean; obs?: string }) => {
+    mutationFn: async ({ 
+      teamId, 
+      date, 
+      isWorking, 
+      obs,
+      entryTime,
+      exitTime 
+    }: { 
+      teamId: string; 
+      date: string; 
+      isWorking: boolean; 
+      obs?: string;
+      entryTime?: string;
+      exitTime?: string;
+    }) => {
       const existing = schedules.find(s => s.team_id === teamId && s.date === date);
       
       if (existing) {
+        const updateData: any = { is_working: isWorking, observation: obs || null };
+        if (entryTime !== undefined) updateData.scheduled_entry_time = entryTime;
+        if (exitTime !== undefined) updateData.scheduled_exit_time = exitTime;
+        
         const { error } = await supabase
           .from("team_schedules")
-          .update({ is_working: isWorking, observation: obs || null })
+          .update(updateData)
           .eq("id", existing.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from("team_schedules")
-          .insert({ team_id: teamId, date, is_working: isWorking, observation: obs || null });
+          .insert({ 
+            team_id: teamId, 
+            date, 
+            is_working: isWorking, 
+            observation: obs || null,
+            scheduled_entry_time: entryTime || '07:00:00',
+            scheduled_exit_time: exitTime || '17:00:00'
+          });
         if (error) throw error;
       }
     },
@@ -731,6 +759,9 @@ function SchedulePopoverContent({
   dateStr: string;
   scheduleMutation: any;
 }) {
+  const [entryTime, setEntryTime] = useState(schedule?.scheduled_entry_time?.slice(0, 5) || "07:00");
+  const [exitTime, setExitTime] = useState(schedule?.scheduled_exit_time?.slice(0, 5) || "17:00");
+
   return (
     <div className="space-y-3">
       <div className="text-sm font-medium">
@@ -764,6 +795,57 @@ function SchedulePopoverContent({
           Folga
         </Button>
       </div>
+      
+      {/* Entry and Exit Time */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-muted-foreground flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            Entrada
+          </label>
+          <Input
+            type="time"
+            value={entryTime}
+            onChange={(e) => setEntryTime(e.target.value)}
+            onBlur={(e) => {
+              if (e.target.value !== (schedule?.scheduled_entry_time?.slice(0, 5) || "07:00")) {
+                scheduleMutation.mutate({
+                  teamId: team.id,
+                  date: dateStr,
+                  isWorking,
+                  obs: schedule?.observation,
+                  entryTime: e.target.value + ":00",
+                });
+              }
+            }}
+            className="mt-1 text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            Saída
+          </label>
+          <Input
+            type="time"
+            value={exitTime}
+            onChange={(e) => setExitTime(e.target.value)}
+            onBlur={(e) => {
+              if (e.target.value !== (schedule?.scheduled_exit_time?.slice(0, 5) || "17:00")) {
+                scheduleMutation.mutate({
+                  teamId: team.id,
+                  date: dateStr,
+                  isWorking,
+                  obs: schedule?.observation,
+                  exitTime: e.target.value + ":00",
+                });
+              }
+            }}
+            className="mt-1 text-sm"
+          />
+        </div>
+      </div>
+
       <div>
         <label className="text-xs text-muted-foreground">Observação (opcional)</label>
         <Textarea
