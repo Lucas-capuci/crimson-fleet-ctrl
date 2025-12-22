@@ -318,6 +318,81 @@ export function DeparturesOverview() {
     }
   };
 
+  // Generate detailed report grouped by supervisor with team names and times
+  const generateDetailedReport = (day: DailyStats): string => {
+    const dateFormatted = format(new Date(day.date + "T12:00:00"), "dd/MM/yyyy");
+    
+    // Group departures by team type first, then by supervisor
+    const typeOrder = ["linha_morta", "linha_viva", "linha_morta_obras", "linha_viva_obras", "poda", "recolha"];
+    const typeLabelsForReport: Record<string, string> = {
+      linha_morta: "Linha Morta",
+      linha_viva: "Linha Viva",
+      linha_morta_obras: "Linha Morta Obras",
+      linha_viva_obras: "Linha Viva Obras",
+      poda: "Poda",
+      recolha: "Recolha",
+    };
+    
+    let report = `INFORME DE ABERTURA DE TURNO - ${dateFormatted}\n\n`;
+    
+    // Group by type
+    const departuresByType: Record<string, DepartureRecord[]> = {};
+    day.departures.forEach(dep => {
+      const type = dep.teams?.type || "unknown";
+      if (!departuresByType[type]) departuresByType[type] = [];
+      departuresByType[type].push(dep);
+    });
+    
+    // Process each type in order
+    typeOrder.forEach(type => {
+      const typeDepartures = departuresByType[type];
+      if (!typeDepartures || typeDepartures.length === 0) return;
+      
+      report += `${typeLabelsForReport[type] || type}\n\n`;
+      
+      // Group by supervisor within this type
+      const bySupervisor: Record<string, DepartureRecord[]> = {};
+      typeDepartures.forEach(dep => {
+        const supervisor = dep.supervisorName || "Sem Supervisor";
+        if (!bySupervisor[supervisor]) bySupervisor[supervisor] = [];
+        bySupervisor[supervisor].push(dep);
+      });
+      
+      // Output each supervisor's teams
+      Object.entries(bySupervisor)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([supervisor, deps]) => {
+          report += `SUPERVISOR - ${supervisor}\n\n`;
+          
+          deps
+            .sort((a, b) => (a.teams?.name || "").localeCompare(b.teams?.name || ""))
+            .forEach(dep => {
+              const emoji = dep.departed ? "🟢" : "🔴";
+              const timeOrReason = dep.departed 
+                ? dep.departure_time || "--:--"
+                : dep.no_departure_reason || "SEM MOTIVO";
+              report += `${emoji}${dep.teams?.name || "?"} - ${timeOrReason}\n`;
+            });
+          
+          report += "\n";
+        });
+    });
+    
+    return report.trim();
+  };
+
+  const copyDetailedReportToClipboard = async () => {
+    if (!selectedDay) return;
+    
+    const report = generateDetailedReport(selectedDay);
+    try {
+      await navigator.clipboard.writeText(report);
+      toast.success("Relatório detalhado copiado para a área de transferência!");
+    } catch (error) {
+      toast.error("Erro ao copiar relatório");
+    }
+  };
+
   // Overall stats
   const totalDepartures = weeklyDepartures?.length || 0;
   const totalDeparted = weeklyDepartures?.filter((d) => d.departed).length || 0;
@@ -557,15 +632,26 @@ export function DeparturesOverview() {
                         <span className="text-sm text-muted-foreground">tempo médio</span>
                       </div>
                     )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={copyReportToClipboard}
-                      className="flex items-center gap-2"
-                    >
-                      <Copy className="h-4 w-4" />
-                      Copiar Relatório
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={copyDetailedReportToClipboard}
+                        className="flex items-center gap-2"
+                      >
+                        <Copy className="h-4 w-4" />
+                        Relatório Detalhado
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={copyReportToClipboard}
+                        className="flex items-center gap-2"
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copiar Relatório
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
