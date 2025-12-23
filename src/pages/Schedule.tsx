@@ -850,11 +850,11 @@ export default function Schedule() {
                       variant="outline" 
                       size="sm"
                       onClick={() => {
-                        const printContent = document.getElementById('print-schedule-content');
-                        if (!printContent) return;
-                        
                         const printWindow = window.open('', '_blank');
-                        if (!printWindow) return;
+                        if (!printWindow) {
+                          toast({ title: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão bloqueados.", variant: "destructive" });
+                          return;
+                        }
                         
                         const formattedDate = format(selectedReportDate, "dd/MM/yyyy");
                         
