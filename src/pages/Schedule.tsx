@@ -16,7 +16,8 @@ import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, Check, X, MessageSquare, Calendar, Users, LayoutGrid, Filter, Clock } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn, formatDate, formatBoolean } from "@/lib/exportCsv";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, getDay } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, getDay, parseISO } from "date-fns";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +64,7 @@ export default function Schedule() {
   const [selectedSupervisor, setSelectedSupervisor] = useState<string>("all");
   const [selectedTeamType, setSelectedTeamType] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<string>("overview");
+  const [selectedReportDate, setSelectedReportDate] = useState<Date>(new Date());
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -282,6 +284,51 @@ export default function Schedule() {
     return profile?.name || "-";
   };
 
+  // Fetch schedules for the selected report date
+  const { data: reportDateSchedules = [] } = useQuery({
+    queryKey: ["schedules-report", format(selectedReportDate, "yyyy-MM-dd")],
+    queryFn: async () => {
+      const dateStr = format(selectedReportDate, "yyyy-MM-dd");
+      const { data, error } = await supabase
+        .from("team_schedules")
+        .select("*")
+        .eq("date", dateStr);
+      if (error) throw error;
+      return data as ScheduleRecord[];
+    },
+  });
+
+  // Get teams scheduled for the selected report date
+  const teamsScheduledForReportDate = useMemo(() => {
+    const dateStr = format(selectedReportDate, "yyyy-MM-dd");
+    return teams.map(team => {
+      const schedule = reportDateSchedules.find(s => s.team_id === team.id);
+      const isWorking = schedule?.is_working ?? true;
+      return {
+        ...team,
+        isWorking,
+        observation: schedule?.observation || null,
+        entryTime: schedule?.scheduled_entry_time || "07:00",
+        exitTime: schedule?.scheduled_exit_time || "17:00",
+        supervisor: getSupervisorForTeam(team.id),
+      };
+    }).filter(t => t.isWorking);
+  }, [teams, reportDateSchedules, selectedReportDate, supervisorTeams, profiles]);
+
+  const teamsOffForReportDate = useMemo(() => {
+    const dateStr = format(selectedReportDate, "yyyy-MM-dd");
+    return teams.map(team => {
+      const schedule = reportDateSchedules.find(s => s.team_id === team.id);
+      const isWorking = schedule?.is_working ?? true;
+      return {
+        ...team,
+        isWorking,
+        observation: schedule?.observation || null,
+        supervisor: getSupervisorForTeam(team.id),
+      };
+    }).filter(t => !t.isWorking);
+  }, [teams, reportDateSchedules, selectedReportDate, supervisorTeams, profiles]);
+
   return (
     <MainLayout>
       <div className="space-y-4 sm:space-y-6">
@@ -394,7 +441,7 @@ export default function Schedule() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <LayoutGrid className="h-4 w-4" />
               <span className="hidden sm:inline">Visão Geral</span>
@@ -404,6 +451,11 @@ export default function Schedule() {
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">Por Equipe</span>
               <span className="sm:hidden">Equipe</span>
+            </TabsTrigger>
+            <TabsTrigger value="bydate" className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              <span className="hidden sm:inline">Por Data</span>
+              <span className="sm:hidden">Data</span>
             </TabsTrigger>
           </TabsList>
           <ExportButton
@@ -736,6 +788,143 @@ export default function Schedule() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          {/* By Date Tab */}
+          <TabsContent value="bydate" className="mt-4 space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Selecione a Data
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row gap-4 items-start">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full sm:w-[280px] justify-start text-left font-normal">
+                        <Calendar className="mr-2 h-4 w-4" />
+                        {format(selectedReportDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={selectedReportDate}
+                        onSelect={(date) => date && setSelectedReportDate(date)}
+                        initialFocus
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <div className="flex gap-4 text-sm">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-success/10 border border-success/30 rounded-md">
+                      <div className="w-3 h-3 rounded-full bg-success" />
+                      <span className="text-success font-medium">{teamsScheduledForReportDate.length}</span>
+                      <span className="text-muted-foreground">Trabalho</span>
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-md">
+                      <div className="w-3 h-3 rounded-full bg-destructive" />
+                      <span className="text-destructive font-medium">{teamsOffForReportDate.length}</span>
+                      <span className="text-muted-foreground">Folga</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Teams Working */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2 text-success">
+                  <Check className="h-4 w-4" />
+                  Equipes Escaladas ({teamsScheduledForReportDate.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {teamsScheduledForReportDate.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-4">Nenhuma equipe escalada para este dia</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Equipe</th>
+                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Tipo</th>
+                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Supervisor</th>
+                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Entrada</th>
+                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Saída</th>
+                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Observação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {teamsScheduledForReportDate.map((team) => (
+                          <tr key={team.id} className="border-b border-border/50 hover:bg-muted/30">
+                            <td className="py-2 px-3 font-medium">{team.name}</td>
+                            <td className="py-2 px-3">
+                              <Badge variant="outline" className="text-xs">
+                                {TEAM_TYPES.find(t => t.value === team.type)?.label || team.type}
+                              </Badge>
+                            </td>
+                            <td className="py-2 px-3 text-muted-foreground">{team.supervisor}</td>
+                            <td className="py-2 px-3">{team.entryTime?.slice(0, 5) || "07:00"}</td>
+                            <td className="py-2 px-3">{team.exitTime?.slice(0, 5) || "17:00"}</td>
+                            <td className="py-2 px-3 text-muted-foreground max-w-[200px] truncate" title={team.observation || ""}>
+                              {team.observation || "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Teams Off */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2 text-destructive">
+                  <X className="h-4 w-4" />
+                  Equipes de Folga ({teamsOffForReportDate.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {teamsOffForReportDate.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-4">Nenhuma equipe de folga para este dia</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Equipe</th>
+                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Tipo</th>
+                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Supervisor</th>
+                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Observação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {teamsOffForReportDate.map((team) => (
+                          <tr key={team.id} className="border-b border-border/50 hover:bg-muted/30">
+                            <td className="py-2 px-3 font-medium">{team.name}</td>
+                            <td className="py-2 px-3">
+                              <Badge variant="outline" className="text-xs">
+                                {TEAM_TYPES.find(t => t.value === team.type)?.label || team.type}
+                              </Badge>
+                            </td>
+                            <td className="py-2 px-3 text-muted-foreground">{team.supervisor}</td>
+                            <td className="py-2 px-3 text-muted-foreground max-w-[200px] truncate" title={team.observation || ""}>
+                              {team.observation || "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
