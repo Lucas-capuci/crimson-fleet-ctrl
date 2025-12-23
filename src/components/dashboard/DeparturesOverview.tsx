@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn, formatBoolean } from "@/lib/exportCsv";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell, LabelList } from "recharts";
 
 const teamTypeLabels: Record<string, string> = {
   linha_viva: "Linha Viva",
@@ -697,7 +698,7 @@ export function DeparturesOverview() {
         </CardContent>
       </Card>
 
-      {/* Supervisor Rankings by Departure Time */}
+      {/* Supervisor Rankings by Departure Time - Bar Chart */}
       <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
@@ -706,61 +707,114 @@ export function DeparturesOverview() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {supervisorRankings.best.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Best Supervisors */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 mb-4">
-                  <Trophy className="h-4 w-4 text-green-500" />
-                  <h4 className="font-medium text-foreground">Melhores Tempos</h4>
-                </div>
-                {supervisorRankings.best.map((supervisor, index) => (
-                  <div 
-                    key={supervisor.id} 
-                    className="flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/20"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg font-bold text-green-600 w-6">{index + 1}º</span>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-foreground">{supervisor.name}</span>
-                        <span className="text-xs text-muted-foreground">{supervisor.teamsCount} equipe(s)</span>
-                      </div>
-                    </div>
-                    <span className="text-sm font-semibold text-green-600">
-                      {supervisor.avgDelayMinutes >= 0 ? `+${supervisor.avgDelayMinutes}` : supervisor.avgDelayMinutes} min
-                    </span>
-                  </div>
-                ))}
-              </div>
+          {(() => {
+            // Get all supervisors sorted by delay for the bar chart
+            const todayDepartures = weeklyDepartures?.filter(dep => dep.date === today) || [];
+            const supervisorDelays: Record<string, { name: string; totalDelay: number; count: number }> = {};
+            
+            todayDepartures.forEach(dep => {
+              if (dep.departed && dep.departure_time && dep.teams && dep.teams.type !== "recolha") {
+                const supervisorId = dep.supervisor_id;
+                const supervisorName = dep.supervisorName || "Desconhecido";
+                const delay = calculateDelayMinutes(dep.departure_time, dep.scheduled_entry_time);
+                
+                if (!supervisorDelays[supervisorId]) {
+                  supervisorDelays[supervisorId] = { name: supervisorName, totalDelay: 0, count: 0 };
+                }
+                supervisorDelays[supervisorId].totalDelay += delay;
+                supervisorDelays[supervisorId].count += 1;
+              }
+            });
+            
+            const chartData = Object.entries(supervisorDelays)
+              .map(([id, data]) => ({
+                id,
+                name: data.name,
+                avgDelayMinutes: Math.round(data.totalDelay / data.count),
+                teamsCount: data.count,
+              }))
+              .sort((a, b) => a.avgDelayMinutes - b.avgDelayMinutes);
 
-              {/* Worst Supervisors */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 mb-4">
-                  <AlertTriangle className="h-4 w-4 text-red-500" />
-                  <h4 className="font-medium text-foreground">Piores Tempos</h4>
-                </div>
-                {supervisorRankings.worst.map((supervisor, index) => (
-                  <div 
-                    key={supervisor.id} 
-                    className="flex items-center justify-between p-3 rounded-lg bg-red-500/10 border border-red-500/20"
+            if (chartData.length === 0) {
+              return <p className="text-muted-foreground text-sm">Nenhum dado de saída registrado</p>;
+            }
+
+            const TARGET_MINUTES = 30;
+            const maxDelay = Math.max(...chartData.map(d => d.avgDelayMinutes), TARGET_MINUTES + 10);
+
+            return (
+              <div className="h-[400px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={chartData}
+                    layout="vertical"
+                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg font-bold text-red-600 w-6">{index + 1}º</span>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-foreground">{supervisor.name}</span>
-                        <span className="text-xs text-muted-foreground">{supervisor.teamsCount} equipe(s)</span>
-                      </div>
-                    </div>
-                    <span className="text-sm font-semibold text-red-600">
-                      {supervisor.avgDelayMinutes >= 0 ? `+${supervisor.avgDelayMinutes}` : supervisor.avgDelayMinutes} min
-                    </span>
-                  </div>
-                ))}
+                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis 
+                      type="number" 
+                      domain={[0, maxDelay]}
+                      tickFormatter={(value) => `${value} min`}
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                    />
+                    <YAxis 
+                      type="category" 
+                      dataKey="name" 
+                      width={120}
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                      tick={{ fill: 'hsl(var(--foreground))' }}
+                    />
+                    <Tooltip 
+                      formatter={(value: number, name: string, props: any) => [
+                        `${value} min (${props.payload.teamsCount} equipe${props.payload.teamsCount > 1 ? 's' : ''})`,
+                        'Tempo Médio'
+                      ]}
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                        color: 'hsl(var(--foreground))'
+                      }}
+                    />
+                    <ReferenceLine 
+                      x={TARGET_MINUTES} 
+                      stroke="hsl(var(--destructive))" 
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      label={{ 
+                        value: `Meta: ${TARGET_MINUTES} min`, 
+                        position: 'top',
+                        fill: 'hsl(var(--destructive))',
+                        fontSize: 12,
+                        fontWeight: 'bold'
+                      }}
+                    />
+                    <Bar 
+                      dataKey="avgDelayMinutes" 
+                      radius={[0, 4, 4, 0]}
+                      maxBarSize={30}
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry.avgDelayMinutes <= TARGET_MINUTES ? 'hsl(142, 76%, 36%)' : 'hsl(0, 84%, 60%)'}
+                        />
+                      ))}
+                      <LabelList 
+                        dataKey="avgDelayMinutes" 
+                        position="right" 
+                        formatter={(value: number) => `${value} min`}
+                        fill="hsl(var(--foreground))"
+                        fontSize={11}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            </div>
-          ) : (
-            <p className="text-muted-foreground text-sm">Nenhum dado de saída registrado</p>
-          )}
+            );
+          })()}
         </CardContent>
       </Card>
 
