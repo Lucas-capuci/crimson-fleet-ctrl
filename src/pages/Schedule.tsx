@@ -857,6 +857,7 @@ export default function Schedule() {
                         }
                         
                         const formattedDate = format(selectedReportDate, "dd/MM/yyyy");
+                        const columnCount = teamsGroupedByType.length <= 3 ? teamsGroupedByType.length : 3;
                         
                         printWindow.document.write(`
                           <!DOCTYPE html>
@@ -864,28 +865,34 @@ export default function Schedule() {
                             <head>
                               <title>Equipes Escaladas - ${formattedDate}</title>
                               <style>
+                                @page { size: A4 landscape; margin: 10mm; }
                                 * { margin: 0; padding: 0; box-sizing: border-box; }
-                                body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; background: white; }
-                                .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #333; }
-                                .header h1 { font-size: 24px; font-weight: bold; color: #111; }
-                                .stats { display: flex; justify-content: center; gap: 40px; margin-bottom: 30px; }
-                                .stat { text-align: center; padding: 10px 20px; border-radius: 8px; }
+                                body { font-family: system-ui, -apple-system, sans-serif; padding: 8px; background: white; font-size: 10px; }
+                                .header { text-align: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #333; }
+                                .header h1 { font-size: 16px; font-weight: bold; color: #111; }
+                                .stats { display: flex; justify-content: center; gap: 20px; margin-bottom: 12px; }
+                                .stat { text-align: center; padding: 6px 16px; border-radius: 6px; }
                                 .stat.working { background: #dcfce7; }
                                 .stat.off { background: #fee2e2; }
-                                .stat-value { font-size: 28px; font-weight: bold; }
-                                .stat-label { font-size: 12px; color: #666; }
-                                .group { margin-bottom: 25px; break-inside: avoid; }
-                                .group-title { font-size: 16px; font-weight: 600; margin-bottom: 10px; padding: 8px 12px; background: #f3f4f6; border-radius: 6px; }
-                                .team-list { display: grid; gap: 8px; }
-                                .team-item { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
-                                .team-name { font-weight: 500; }
-                                .team-info { font-size: 12px; color: #666; }
-                                .team-time { font-size: 12px; color: #16a34a; }
-                                .off-section { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
-                                .off-title { font-size: 16px; font-weight: 600; margin-bottom: 10px; color: #dc2626; }
-                                .off-teams { display: flex; flex-wrap: wrap; gap: 8px; }
-                                .off-badge { padding: 6px 12px; background: #fee2e2; border-radius: 20px; font-size: 13px; }
-                                @media print { body { padding: 10px; } }
+                                .stat-value { font-size: 18px; font-weight: bold; }
+                                .stat-label { font-size: 9px; color: #666; }
+                                .grid { display: grid; grid-template-columns: repeat(${columnCount}, 1fr); gap: 10px; }
+                                .card { border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; break-inside: avoid; }
+                                .card-header { background: #f3f4f6; padding: 6px 10px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+                                .card-title { font-size: 11px; font-weight: 600; }
+                                .card-badge { font-size: 8px; background: #e0e7ff; color: #4338ca; padding: 2px 6px; border-radius: 10px; }
+                                .team-item { padding: 5px 10px; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center; }
+                                .team-item:last-child { border-bottom: none; }
+                                .team-name { font-size: 9px; font-weight: 500; }
+                                .team-info { font-size: 8px; color: #666; }
+                                .team-time { font-size: 8px; color: #16a34a; font-weight: 500; }
+                                .off-section { margin-top: 12px; padding: 8px; background: #fef2f2; border-radius: 6px; border: 1px solid #fecaca; }
+                                .off-title { font-size: 10px; font-weight: 600; margin-bottom: 6px; color: #dc2626; }
+                                .off-teams { display: flex; flex-wrap: wrap; gap: 4px; }
+                                .off-badge { padding: 3px 8px; background: white; border: 1px solid #fecaca; border-radius: 12px; font-size: 8px; }
+                                @media print { 
+                                  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                                }
                               </style>
                             </head>
                             <body>
@@ -902,22 +909,25 @@ export default function Schedule() {
                                   <div class="stat-label">De Folga</div>
                                 </div>
                               </div>
-                              ${teamsGroupedByType.map(group => `
-                                <div class="group">
-                                  <div class="group-title">${group.label} (${group.teams.length})</div>
-                                  <div class="team-list">
+                              <div class="grid">
+                                ${teamsGroupedByType.map(group => `
+                                  <div class="card">
+                                    <div class="card-header">
+                                      <span class="card-title">${group.label}</span>
+                                      <span class="card-badge">${group.teams.length} equipe${group.teams.length !== 1 ? 's' : ''}</span>
+                                    </div>
                                     ${group.teams.map(team => `
                                       <div class="team-item">
                                         <div>
                                           <div class="team-name">${team.name}</div>
-                                          <div class="team-info">Supervisor: ${team.supervisor}</div>
+                                          <div class="team-info">${team.supervisor}</div>
                                         </div>
                                         <div class="team-time">${team.entryTime?.slice(0, 5) || "07:00"}</div>
                                       </div>
                                     `).join('')}
                                   </div>
-                                </div>
-                              `).join('')}
+                                `).join('')}
+                              </div>
                               ${teamsOffForReportDate.length > 0 ? `
                                 <div class="off-section">
                                   <div class="off-title">Equipes de Folga (${teamsOffForReportDate.length})</div>
