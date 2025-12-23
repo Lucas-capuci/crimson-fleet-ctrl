@@ -437,7 +437,8 @@ export function DeparturesOverview() {
     const teamDelays: Record<string, { name: string; delayMinutes: number }> = {};
     
     todayDepartures.forEach(dep => {
-      if (dep.departed && dep.departure_time && dep.teams) {
+      // Exclude "recolha" teams from ranking
+      if (dep.departed && dep.departure_time && dep.teams && dep.teams.type !== "recolha") {
         const teamId = dep.teams.id;
         const teamName = dep.teams.name;
         const delay = calculateDelayMinutes(dep.departure_time, dep.scheduled_entry_time);
