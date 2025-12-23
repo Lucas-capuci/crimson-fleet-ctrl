@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, Edit, Trash2, Users, Truck, Car } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Users, Truck, Car, Clock } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn } from "@/lib/exportCsv";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -44,6 +44,8 @@ interface Team {
   has_basket: boolean;
   cost_center: string | null;
   show_in_departures: boolean;
+  scheduled_entry_time: string;
+  scheduled_exit_time: string;
   created_at: string;
 }
 
@@ -85,6 +87,8 @@ const Teams = () => {
     supervisor_id: "",
     vehicle_id: "",
     show_in_departures: true,
+    scheduled_entry_time: "07:00",
+    scheduled_exit_time: "17:00",
   });
 
   const { data: teams = [], isLoading } = useQuery({
@@ -146,11 +150,16 @@ const Teams = () => {
   });
 
   const createTeam = useMutation({
-    mutationFn: async (data: { name: string; type: TeamType; has_basket: boolean; cost_center: string; supervisor_id: string; vehicle_id: string; show_in_departures: boolean }) => {
-      const { cost_center, supervisor_id, vehicle_id, ...teamData } = data;
+    mutationFn: async (data: { name: string; type: TeamType; has_basket: boolean; cost_center: string; supervisor_id: string; vehicle_id: string; show_in_departures: boolean; scheduled_entry_time: string; scheduled_exit_time: string }) => {
+      const { cost_center, supervisor_id, vehicle_id, scheduled_entry_time, scheduled_exit_time, ...teamData } = data;
       const { data: newTeam, error } = await supabase
         .from("teams")
-        .insert({ ...teamData, cost_center: cost_center || null })
+        .insert({ 
+          ...teamData, 
+          cost_center: cost_center || null,
+          scheduled_entry_time: scheduled_entry_time || "07:00:00",
+          scheduled_exit_time: scheduled_exit_time || "17:00:00",
+        })
         .select()
         .single();
       if (error) throw error;
@@ -185,11 +194,16 @@ const Teams = () => {
   });
 
   const updateTeam = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { name: string; type: TeamType; has_basket: boolean; cost_center: string; supervisor_id: string; vehicle_id: string; show_in_departures: boolean } }) => {
-      const { cost_center, supervisor_id, vehicle_id, ...teamData } = data;
+    mutationFn: async ({ id, data }: { id: string; data: { name: string; type: TeamType; has_basket: boolean; cost_center: string; supervisor_id: string; vehicle_id: string; show_in_departures: boolean; scheduled_entry_time: string; scheduled_exit_time: string } }) => {
+      const { cost_center, supervisor_id, vehicle_id, scheduled_entry_time, scheduled_exit_time, ...teamData } = data;
       const { error } = await supabase
         .from("teams")
-        .update({ ...teamData, cost_center: cost_center || null })
+        .update({ 
+          ...teamData, 
+          cost_center: cost_center || null,
+          scheduled_entry_time: scheduled_entry_time || "07:00:00",
+          scheduled_exit_time: scheduled_exit_time || "17:00:00",
+        })
         .eq("id", id);
       if (error) throw error;
 
@@ -283,6 +297,8 @@ const Teams = () => {
       supervisor_id: assignment?.supervisor_id || "",
       vehicle_id: linkedVehicle?.id || "",
       show_in_departures: team.show_in_departures,
+      scheduled_entry_time: team.scheduled_entry_time?.slice(0, 5) || "07:00",
+      scheduled_exit_time: team.scheduled_exit_time?.slice(0, 5) || "17:00",
     });
     setIsDialogOpen(true);
   };
@@ -294,7 +310,7 @@ const Teams = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: "", type: "linha_viva", has_basket: false, cost_center: "", supervisor_id: "", vehicle_id: "", show_in_departures: true });
+    setFormData({ name: "", type: "linha_viva", has_basket: false, cost_center: "", supervisor_id: "", vehicle_id: "", show_in_departures: true, scheduled_entry_time: "07:00", scheduled_exit_time: "17:00" });
     setEditingTeam(null);
     setIsDialogOpen(false);
   };
@@ -482,6 +498,32 @@ const Teams = () => {
                   <Label htmlFor="show_in_departures" className="cursor-pointer">
                     Exibir no lançamento de saídas
                   </Label>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="scheduled_entry_time" className="flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Horário de Entrada
+                    </Label>
+                    <Input
+                      id="scheduled_entry_time"
+                      type="time"
+                      value={formData.scheduled_entry_time}
+                      onChange={(e) => setFormData({ ...formData, scheduled_entry_time: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="scheduled_exit_time" className="flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Horário de Saída
+                    </Label>
+                    <Input
+                      id="scheduled_exit_time"
+                      type="time"
+                      value={formData.scheduled_exit_time}
+                      onChange={(e) => setFormData({ ...formData, scheduled_exit_time: e.target.value })}
+                    />
+                  </div>
                 </div>
                 <div className="flex justify-end gap-3 pt-4">
                   <Button type="button" variant="outline" onClick={resetForm}>
