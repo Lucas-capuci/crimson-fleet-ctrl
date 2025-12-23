@@ -300,7 +300,6 @@ export default function Schedule() {
 
   // Get teams scheduled for the selected report date
   const teamsScheduledForReportDate = useMemo(() => {
-    const dateStr = format(selectedReportDate, "yyyy-MM-dd");
     return teams.map(team => {
       const schedule = reportDateSchedules.find(s => s.team_id === team.id);
       const isWorking = schedule?.is_working ?? true;
@@ -316,7 +315,6 @@ export default function Schedule() {
   }, [teams, reportDateSchedules, selectedReportDate, supervisorTeams, profiles]);
 
   const teamsOffForReportDate = useMemo(() => {
-    const dateStr = format(selectedReportDate, "yyyy-MM-dd");
     return teams.map(team => {
       const schedule = reportDateSchedules.find(s => s.team_id === team.id);
       const isWorking = schedule?.is_working ?? true;
@@ -328,6 +326,29 @@ export default function Schedule() {
       };
     }).filter(t => !t.isWorking);
   }, [teams, reportDateSchedules, selectedReportDate, supervisorTeams, profiles]);
+
+  // Group teams by type for the report date view
+  const teamsGroupedByType = useMemo(() => {
+    const groups: Record<string, typeof teamsScheduledForReportDate> = {};
+    
+    teamsScheduledForReportDate.forEach(team => {
+      if (!groups[team.type]) {
+        groups[team.type] = [];
+      }
+      groups[team.type].push(team);
+    });
+    
+    // Sort by TEAM_TYPES order
+    const sortedTypes = TEAM_TYPES
+      .filter(t => t.value !== "all" && groups[t.value])
+      .map(t => t.value);
+    
+    return sortedTypes.map(type => ({
+      type,
+      label: TEAM_TYPES.find(t => t.value === type)?.label || type,
+      teams: groups[type] || [],
+    }));
+  }, [teamsScheduledForReportDate]);
 
   return (
     <MainLayout>
@@ -852,9 +873,9 @@ export default function Schedule() {
               </CardContent>
             </Card>
 
-            {/* Teams Working - Cards Grid */}
-            <div>
-              <div className="flex items-center gap-2 mb-4">
+            {/* Teams Working - Grouped by Type */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-success/20 rounded-lg">
                   <Check className="h-4 w-4 text-success" />
                 </div>
@@ -870,38 +891,43 @@ export default function Schedule() {
                   </CardContent>
                 </Card>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {teamsScheduledForReportDate.map((team) => (
-                    <Card key={team.id} className="hover:shadow-md transition-shadow border-l-4 border-l-success">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <h4 className="font-semibold text-foreground">{team.name}</h4>
-                            <Badge variant="outline" className="text-xs mt-1">
-                              {TEAM_TYPES.find(t => t.value === team.type)?.label || team.type}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-1 text-xs bg-success/10 text-success px-2 py-1 rounded-full">
-                            <Check className="h-3 w-3" />
-                            Trabalho
-                          </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {teamsGroupedByType.map((group) => (
+                    <Card key={group.type} className="overflow-hidden">
+                      <CardHeader className="py-3 px-4 bg-primary/5 border-b">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                            <Users className="h-4 w-4 text-primary" />
+                            {group.label}
+                          </CardTitle>
+                          <Badge className="bg-primary/10 text-primary border-0">
+                            {group.teams.length} equipe{group.teams.length !== 1 ? 's' : ''}
+                          </Badge>
                         </div>
-                        
-                        <div className="space-y-2 text-sm">
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <Users className="h-3.5 w-3.5" />
-                            <span>{team.supervisor}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <Clock className="h-3.5 w-3.5" />
-                            <span>{team.entryTime?.slice(0, 5) || "07:00"} - {team.exitTime?.slice(0, 5) || "17:00"}</span>
-                          </div>
-                          {team.observation && (
-                            <div className="flex items-start gap-2 text-muted-foreground bg-muted/50 p-2 rounded-md mt-2">
-                              <MessageSquare className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-                              <span className="text-xs">{team.observation}</span>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="divide-y divide-border">
+                          {group.teams.map((team) => (
+                            <div key={team.id} className="p-3 hover:bg-muted/30 transition-colors">
+                              <div className="flex items-start justify-between mb-1">
+                                <h4 className="font-medium text-sm text-foreground">{team.name}</h4>
+                                <div className="flex items-center gap-1 text-xs text-success">
+                                  <Clock className="h-3 w-3" />
+                                  {team.entryTime?.slice(0, 5) || "07:00"}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Users className="h-3 w-3" />
+                                <span>{team.supervisor}</span>
+                              </div>
+                              {team.observation && (
+                                <div className="mt-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded flex items-start gap-1.5">
+                                  <MessageSquare className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                                  <span>{team.observation}</span>
+                                </div>
+                              )}
                             </div>
-                          )}
+                          ))}
                         </div>
                       </CardContent>
                     </Card>
@@ -910,10 +936,10 @@ export default function Schedule() {
               )}
             </div>
 
-            {/* Teams Off - Cards Grid */}
+            {/* Teams Off */}
             {teamsOffForReportDate.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-4">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
                   <div className="p-1.5 bg-destructive/20 rounded-lg">
                     <X className="h-4 w-4 text-destructive" />
                   </div>
@@ -921,28 +947,25 @@ export default function Schedule() {
                   <Badge variant="secondary" className="ml-2">{teamsOffForReportDate.length}</Badge>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {teamsOffForReportDate.map((team) => (
-                    <Card key={team.id} className="hover:shadow-md transition-shadow border-l-4 border-l-destructive bg-muted/30">
-                      <CardContent className="p-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="font-medium text-sm text-foreground">{team.name}</h4>
-                            <span className="text-xs text-muted-foreground">{team.supervisor}</span>
-                          </div>
-                          <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/30">
-                            Folga
-                          </Badge>
-                        </div>
-                        {team.observation && (
-                          <p className="text-xs text-muted-foreground mt-2 truncate" title={team.observation}>
-                            {team.observation}
-                          </p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                <Card className="bg-muted/20">
+                  <CardContent className="p-4">
+                    <div className="flex flex-wrap gap-2">
+                      {teamsOffForReportDate.map((team) => (
+                        <Badge 
+                          key={team.id} 
+                          variant="outline" 
+                          className="py-1.5 px-3 bg-background border-destructive/30 text-foreground"
+                        >
+                          <X className="h-3 w-3 mr-1.5 text-destructive" />
+                          {team.name}
+                          <span className="ml-1.5 text-muted-foreground text-xs">
+                            ({TEAM_TYPES.find(t => t.value === team.type)?.label || team.type})
+                          </span>
+                        </Badge>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
           </TabsContent>
