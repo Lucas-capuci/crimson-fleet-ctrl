@@ -56,6 +56,34 @@ export function DeparturesOverview() {
   const today = format(new Date(), "yyyy-MM-dd");
   const [selectedDay, setSelectedDay] = useState<DailyStats | null>(null);
 
+  // Get scheduled teams count for today
+  const { data: scheduledTeamsToday = 0 } = useQuery({
+    queryKey: ["dashboard_scheduled_teams_today"],
+    queryFn: async () => {
+      // Get all teams with show_in_departures = true
+      const { data: teamsWithDepartures, error: teamsError } = await supabase
+        .from("teams")
+        .select("id")
+        .eq("show_in_departures", true);
+      
+      if (teamsError) throw teamsError;
+      
+      const allTeamIds = teamsWithDepartures?.map(t => t.id) || [];
+      
+      // Get teams explicitly marked as not working today
+      const { data: notWorkingToday } = await supabase
+        .from("team_schedules")
+        .select("team_id")
+        .eq("date", today)
+        .eq("is_working", false);
+      
+      const notWorkingIds = notWorkingToday?.map(s => s.team_id) || [];
+      
+      // Scheduled count = all teams minus those not working
+      return allTeamIds.filter(id => !notWorkingIds.includes(id)).length;
+    },
+  });
+
   // Weekly departures for analytics
   const { data: weeklyDepartures = [] } = useQuery({
     queryKey: ["dashboard_weekly_departures"],
@@ -450,10 +478,10 @@ export function DeparturesOverview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">
-              {todayStats?.departed || 0}/{todayStats?.total || 0}
+              {todayStats?.departed || 0}/{scheduledTeamsToday}
             </div>
             <p className="text-xs text-muted-foreground">
-              {todayStats?.percentage || 0}% das equipes
+              {scheduledTeamsToday > 0 ? Math.round(((todayStats?.departed || 0) / scheduledTeamsToday) * 100) : 0}% das equipes
             </p>
           </CardContent>
         </Card>
