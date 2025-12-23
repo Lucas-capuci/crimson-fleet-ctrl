@@ -40,22 +40,66 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // Parse request body
-    const body: RequestBody = await req.json()
-    console.log('Received request body:', JSON.stringify(body).substring(0, 500))
+    const rawBody = await req.text()
+    console.log('Raw body length:', rawBody.length)
+    
+    if (!rawBody || rawBody.length === 0) {
+      console.log('Empty request body received')
+      return new Response(
+        JSON.stringify({ 
+          error: 'Request body is empty',
+          hint: 'Make sure to set Content-Type: application/json and send JSON in the body'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    let body: any
+    try {
+      body = JSON.parse(rawBody)
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError)
+      console.log('Raw body preview:', rawBody.substring(0, 200))
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid JSON in request body',
+          details: parseError instanceof Error ? parseError.message : 'Unknown parse error'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    console.log('Received request body keys:', Object.keys(body))
+
+    // Detect and unwrap 'body' wrapper if present (Power Automate sends this)
+    let dataObj = body
+    if (body.body && typeof body.body === 'object') {
+      console.log('Detected body wrapper, unwrapping...')
+      dataObj = body.body
+      console.log('Unwrapped data keys:', Object.keys(dataObj))
+    }
 
     // Extract rows from either firstTableRows or nested structure
     let rows: ProductionRow[] = []
     
-    if (body.firstTableRows && Array.isArray(body.firstTableRows)) {
-      rows = body.firstTableRows
-    } else if (body.results?.[0]?.tables?.[0]?.rows) {
-      rows = body.results[0].tables[0].rows
+    if (dataObj.firstTableRows && Array.isArray(dataObj.firstTableRows)) {
+      rows = dataObj.firstTableRows
+      console.log('Extracted rows from firstTableRows')
+    } else if (dataObj.results?.[0]?.tables?.[0]?.rows) {
+      rows = dataObj.results[0].tables[0].rows
+      console.log('Extracted rows from results[0].tables[0].rows')
     }
 
     if (rows.length === 0) {
       console.log('No rows found in request')
+      console.log('Data structure:', JSON.stringify(dataObj).substring(0, 300))
       return new Response(
-        JSON.stringify({ error: 'No data rows found in request', inserted: 0, ignored: 0 }),
+        JSON.stringify({ 
+          error: 'No data rows found in request', 
+          inserted: 0, 
+          ignored: 0,
+          hint: 'Expected firstTableRows array or results[0].tables[0].rows'
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
