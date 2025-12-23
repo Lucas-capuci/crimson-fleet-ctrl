@@ -29,6 +29,7 @@ interface DepartureRecord {
   no_departure_reason: string | null;
   teams: { id: string; name: string; type: string } | null;
   supervisorName: string;
+  supervisor_id: string;
   date: string;
   scheduled_entry_time?: string;
 }
@@ -111,6 +112,7 @@ export function DeparturesOverview() {
         no_departure_reason: d.no_departure_reason,
         teams: d.teams,
         date: d.date,
+        supervisor_id: d.supervisor_id,
         supervisorName: profilesMap.get(d.supervisor_id) || "-",
         scheduled_entry_time: d.teams?.scheduled_entry_time || "07:00:00"
       })) as DepartureRecord[];
@@ -146,6 +148,7 @@ export function DeparturesOverview() {
           no_departure_reason: d.no_departure_reason,
           teams: d.teams,
           date: d.date,
+          supervisor_id: d.supervisor_id,
           supervisorName: profilesMap.get(d.supervisor_id) || "-",
           scheduled_entry_time: d.teams?.scheduled_entry_time || "07:00:00"
         })) as DepartureRecord[];
@@ -462,6 +465,41 @@ export function DeparturesOverview() {
     return { best, worst };
   })();
 
+  // Calculate supervisor rankings by departure time for today only
+  const supervisorRankings = (() => {
+    const todayDepartures = weeklyDepartures?.filter(dep => dep.date === today) || [];
+    const supervisorDelays: Record<string, { name: string; totalDelay: number; count: number }> = {};
+    
+    todayDepartures.forEach(dep => {
+      // Exclude "recolha" teams from ranking
+      if (dep.departed && dep.departure_time && dep.teams && dep.teams.type !== "recolha") {
+        const supervisorId = dep.supervisor_id;
+        const supervisorName = dep.supervisorName || "Desconhecido";
+        const delay = calculateDelayMinutes(dep.departure_time, dep.scheduled_entry_time);
+        
+        if (!supervisorDelays[supervisorId]) {
+          supervisorDelays[supervisorId] = { name: supervisorName, totalDelay: 0, count: 0 };
+        }
+        supervisorDelays[supervisorId].totalDelay += delay;
+        supervisorDelays[supervisorId].count += 1;
+      }
+    });
+    
+    const rankings = Object.entries(supervisorDelays)
+      .map(([id, data]) => ({
+        id,
+        name: data.name,
+        avgDelayMinutes: Math.round(data.totalDelay / data.count),
+        teamsCount: data.count,
+      }))
+      .sort((a, b) => a.avgDelayMinutes - b.avgDelayMinutes);
+    
+    const best = rankings.slice(0, 5);
+    const worst = [...rankings].sort((a, b) => b.avgDelayMinutes - a.avgDelayMinutes).slice(0, 5);
+    
+    return { best, worst };
+  })();
+
   // CSV columns for departures
   const departuresCsvColumns: CsvColumn[] = [
     { key: "date", header: "Data", format: (v) => format(new Date(v + "T12:00:00"), "dd/MM/yyyy") },
@@ -648,6 +686,73 @@ export function DeparturesOverview() {
                     </div>
                     <span className="text-sm font-semibold text-red-600">
                       {team.delayMinutes >= 0 ? `+${team.delayMinutes}` : team.delayMinutes} min
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm">Nenhum dado de saída registrado</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Supervisor Rankings by Departure Time */}
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            Ranking de Supervisores por Tempo de Saída - Hoje
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {supervisorRankings.best.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Best Supervisors */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-4">
+                  <Trophy className="h-4 w-4 text-green-500" />
+                  <h4 className="font-medium text-foreground">Melhores Tempos</h4>
+                </div>
+                {supervisorRankings.best.map((supervisor, index) => (
+                  <div 
+                    key={supervisor.id} 
+                    className="flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/20"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-bold text-green-600 w-6">{index + 1}º</span>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-foreground">{supervisor.name}</span>
+                        <span className="text-xs text-muted-foreground">{supervisor.teamsCount} equipe(s)</span>
+                      </div>
+                    </div>
+                    <span className="text-sm font-semibold text-green-600">
+                      {supervisor.avgDelayMinutes >= 0 ? `+${supervisor.avgDelayMinutes}` : supervisor.avgDelayMinutes} min
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Worst Supervisors */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-4">
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                  <h4 className="font-medium text-foreground">Piores Tempos</h4>
+                </div>
+                {supervisorRankings.worst.map((supervisor, index) => (
+                  <div 
+                    key={supervisor.id} 
+                    className="flex items-center justify-between p-3 rounded-lg bg-red-500/10 border border-red-500/20"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-bold text-red-600 w-6">{index + 1}º</span>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-foreground">{supervisor.name}</span>
+                        <span className="text-xs text-muted-foreground">{supervisor.teamsCount} equipe(s)</span>
+                      </div>
+                    </div>
+                    <span className="text-sm font-semibold text-red-600">
+                      {supervisor.avgDelayMinutes >= 0 ? `+${supervisor.avgDelayMinutes}` : supervisor.avgDelayMinutes} min
                     </span>
                   </div>
                 ))}
