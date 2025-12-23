@@ -791,140 +791,160 @@ export default function Schedule() {
           </TabsContent>
 
           {/* By Date Tab */}
-          <TabsContent value="bydate" className="mt-4 space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Selecione a Data
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col sm:flex-row gap-4 items-start">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full sm:w-[280px] justify-start text-left font-normal">
-                        <Calendar className="mr-2 h-4 w-4" />
-                        {format(selectedReportDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <CalendarComponent
-                        mode="single"
-                        selected={selectedReportDate}
-                        onSelect={(date) => date && setSelectedReportDate(date)}
-                        initialFocus
-                        className="pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <div className="flex gap-4 text-sm">
-                    <div className="flex items-center gap-2 px-3 py-2 bg-success/10 border border-success/30 rounded-md">
-                      <div className="w-3 h-3 rounded-full bg-success" />
-                      <span className="text-success font-medium">{teamsScheduledForReportDate.length}</span>
-                      <span className="text-muted-foreground">Trabalho</span>
+          <TabsContent value="bydate" className="mt-4 space-y-6">
+            {/* Date Picker Header */}
+            <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+              <CardContent className="pt-6">
+                <div className="flex flex-col lg:flex-row gap-6 items-center justify-between">
+                  <div className="flex flex-col sm:flex-row gap-4 items-center">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full sm:w-[300px] h-12 justify-start text-left font-normal bg-background hover:bg-background/80">
+                          <Calendar className="mr-3 h-5 w-5 text-primary" />
+                          <div className="flex flex-col items-start">
+                            <span className="text-xs text-muted-foreground">Data selecionada</span>
+                            <span className="font-semibold">{format(selectedReportDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}</span>
+                          </div>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 bg-popover" align="start">
+                        <CalendarComponent
+                          mode="single"
+                          selected={selectedReportDate}
+                          onSelect={(date) => date && setSelectedReportDate(date)}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setSelectedReportDate(new Date())}
+                      className="text-primary"
+                    >
+                      Ir para Hoje
+                    </Button>
+                  </div>
+                  
+                  {/* Stats Summary */}
+                  <div className="flex gap-4">
+                    <div className="flex items-center gap-3 px-5 py-3 bg-success/10 border border-success/30 rounded-xl">
+                      <div className="p-2 bg-success/20 rounded-lg">
+                        <Check className="h-5 w-5 text-success" />
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-success">{teamsScheduledForReportDate.length}</div>
+                        <div className="text-xs text-muted-foreground">Trabalhando</div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-md">
-                      <div className="w-3 h-3 rounded-full bg-destructive" />
-                      <span className="text-destructive font-medium">{teamsOffForReportDate.length}</span>
-                      <span className="text-muted-foreground">Folga</span>
+                    <div className="flex items-center gap-3 px-5 py-3 bg-destructive/10 border border-destructive/30 rounded-xl">
+                      <div className="p-2 bg-destructive/20 rounded-lg">
+                        <X className="h-5 w-5 text-destructive" />
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-destructive">{teamsOffForReportDate.length}</div>
+                        <div className="text-xs text-muted-foreground">De Folga</div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Teams Working */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2 text-success">
-                  <Check className="h-4 w-4" />
-                  Equipes Escaladas ({teamsScheduledForReportDate.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {teamsScheduledForReportDate.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-4">Nenhuma equipe escalada para este dia</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border">
-                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Equipe</th>
-                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Tipo</th>
-                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Supervisor</th>
-                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Entrada</th>
-                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Saída</th>
-                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Observação</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {teamsScheduledForReportDate.map((team) => (
-                          <tr key={team.id} className="border-b border-border/50 hover:bg-muted/30">
-                            <td className="py-2 px-3 font-medium">{team.name}</td>
-                            <td className="py-2 px-3">
-                              <Badge variant="outline" className="text-xs">
-                                {TEAM_TYPES.find(t => t.value === team.type)?.label || team.type}
-                              </Badge>
-                            </td>
-                            <td className="py-2 px-3 text-muted-foreground">{team.supervisor}</td>
-                            <td className="py-2 px-3">{team.entryTime?.slice(0, 5) || "07:00"}</td>
-                            <td className="py-2 px-3">{team.exitTime?.slice(0, 5) || "17:00"}</td>
-                            <td className="py-2 px-3 text-muted-foreground max-w-[200px] truncate" title={team.observation || ""}>
-                              {team.observation || "-"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {/* Teams Working - Cards Grid */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-1.5 bg-success/20 rounded-lg">
+                  <Check className="h-4 w-4 text-success" />
+                </div>
+                <h3 className="text-lg font-semibold">Equipes Escaladas</h3>
+                <Badge variant="secondary" className="ml-2">{teamsScheduledForReportDate.length}</Badge>
+              </div>
+              
+              {teamsScheduledForReportDate.length === 0 ? (
+                <Card className="border-dashed">
+                  <CardContent className="py-8 text-center">
+                    <Users className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+                    <p className="text-muted-foreground">Nenhuma equipe escalada para este dia</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {teamsScheduledForReportDate.map((team) => (
+                    <Card key={team.id} className="hover:shadow-md transition-shadow border-l-4 border-l-success">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <h4 className="font-semibold text-foreground">{team.name}</h4>
+                            <Badge variant="outline" className="text-xs mt-1">
+                              {TEAM_TYPES.find(t => t.value === team.type)?.label || team.type}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-1 text-xs bg-success/10 text-success px-2 py-1 rounded-full">
+                            <Check className="h-3 w-3" />
+                            Trabalho
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Users className="h-3.5 w-3.5" />
+                            <span>{team.supervisor}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Clock className="h-3.5 w-3.5" />
+                            <span>{team.entryTime?.slice(0, 5) || "07:00"} - {team.exitTime?.slice(0, 5) || "17:00"}</span>
+                          </div>
+                          {team.observation && (
+                            <div className="flex items-start gap-2 text-muted-foreground bg-muted/50 p-2 rounded-md mt-2">
+                              <MessageSquare className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                              <span className="text-xs">{team.observation}</span>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
 
-            {/* Teams Off */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2 text-destructive">
-                  <X className="h-4 w-4" />
-                  Equipes de Folga ({teamsOffForReportDate.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {teamsOffForReportDate.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-4">Nenhuma equipe de folga para este dia</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border">
-                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Equipe</th>
-                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Tipo</th>
-                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Supervisor</th>
-                          <th className="text-left py-2 px-3 font-medium text-muted-foreground">Observação</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {teamsOffForReportDate.map((team) => (
-                          <tr key={team.id} className="border-b border-border/50 hover:bg-muted/30">
-                            <td className="py-2 px-3 font-medium">{team.name}</td>
-                            <td className="py-2 px-3">
-                              <Badge variant="outline" className="text-xs">
-                                {TEAM_TYPES.find(t => t.value === team.type)?.label || team.type}
-                              </Badge>
-                            </td>
-                            <td className="py-2 px-3 text-muted-foreground">{team.supervisor}</td>
-                            <td className="py-2 px-3 text-muted-foreground max-w-[200px] truncate" title={team.observation || ""}>
-                              {team.observation || "-"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+            {/* Teams Off - Cards Grid */}
+            {teamsOffForReportDate.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-1.5 bg-destructive/20 rounded-lg">
+                    <X className="h-4 w-4 text-destructive" />
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                  <h3 className="text-lg font-semibold">Equipes de Folga</h3>
+                  <Badge variant="secondary" className="ml-2">{teamsOffForReportDate.length}</Badge>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {teamsOffForReportDate.map((team) => (
+                    <Card key={team.id} className="hover:shadow-md transition-shadow border-l-4 border-l-destructive bg-muted/30">
+                      <CardContent className="p-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-medium text-sm text-foreground">{team.name}</h4>
+                            <span className="text-xs text-muted-foreground">{team.supervisor}</span>
+                          </div>
+                          <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/30">
+                            Folga
+                          </Badge>
+                        </div>
+                        {team.observation && (
+                          <p className="text-xs text-muted-foreground mt-2 truncate" title={team.observation}>
+                            {team.observation}
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
