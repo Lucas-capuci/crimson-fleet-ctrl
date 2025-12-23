@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, Check, X, MessageSquare, Calendar, Users, LayoutGrid, Filter, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, X, MessageSquare, Calendar, Users, LayoutGrid, Filter, Clock, Printer } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn, formatDate, formatBoolean } from "@/lib/exportCsv";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, getDay, parseISO } from "date-fns";
@@ -845,6 +845,103 @@ export default function Schedule() {
                       className="text-primary"
                     >
                       Ir para Hoje
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        const printContent = document.getElementById('print-schedule-content');
+                        if (!printContent) return;
+                        
+                        const printWindow = window.open('', '_blank');
+                        if (!printWindow) return;
+                        
+                        const formattedDate = format(selectedReportDate, "dd/MM/yyyy");
+                        
+                        printWindow.document.write(`
+                          <!DOCTYPE html>
+                          <html>
+                            <head>
+                              <title>Equipes Escaladas - ${formattedDate}</title>
+                              <style>
+                                * { margin: 0; padding: 0; box-sizing: border-box; }
+                                body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; background: white; }
+                                .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #333; }
+                                .header h1 { font-size: 24px; font-weight: bold; color: #111; }
+                                .stats { display: flex; justify-content: center; gap: 40px; margin-bottom: 30px; }
+                                .stat { text-align: center; padding: 10px 20px; border-radius: 8px; }
+                                .stat.working { background: #dcfce7; }
+                                .stat.off { background: #fee2e2; }
+                                .stat-value { font-size: 28px; font-weight: bold; }
+                                .stat-label { font-size: 12px; color: #666; }
+                                .group { margin-bottom: 25px; break-inside: avoid; }
+                                .group-title { font-size: 16px; font-weight: 600; margin-bottom: 10px; padding: 8px 12px; background: #f3f4f6; border-radius: 6px; }
+                                .team-list { display: grid; gap: 8px; }
+                                .team-item { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+                                .team-name { font-weight: 500; }
+                                .team-info { font-size: 12px; color: #666; }
+                                .team-time { font-size: 12px; color: #16a34a; }
+                                .off-section { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+                                .off-title { font-size: 16px; font-weight: 600; margin-bottom: 10px; color: #dc2626; }
+                                .off-teams { display: flex; flex-wrap: wrap; gap: 8px; }
+                                .off-badge { padding: 6px 12px; background: #fee2e2; border-radius: 20px; font-size: 13px; }
+                                @media print { body { padding: 10px; } }
+                              </style>
+                            </head>
+                            <body>
+                              <div class="header">
+                                <h1>EQUIPES ESCALADAS PARA O DIA ${formattedDate}</h1>
+                              </div>
+                              <div class="stats">
+                                <div class="stat working">
+                                  <div class="stat-value" style="color: #16a34a;">${teamsScheduledForReportDate.length}</div>
+                                  <div class="stat-label">Trabalhando</div>
+                                </div>
+                                <div class="stat off">
+                                  <div class="stat-value" style="color: #dc2626;">${teamsOffForReportDate.length}</div>
+                                  <div class="stat-label">De Folga</div>
+                                </div>
+                              </div>
+                              ${teamsGroupedByType.map(group => `
+                                <div class="group">
+                                  <div class="group-title">${group.label} (${group.teams.length})</div>
+                                  <div class="team-list">
+                                    ${group.teams.map(team => `
+                                      <div class="team-item">
+                                        <div>
+                                          <div class="team-name">${team.name}</div>
+                                          <div class="team-info">Supervisor: ${team.supervisor}</div>
+                                        </div>
+                                        <div class="team-time">${team.entryTime?.slice(0, 5) || "07:00"}</div>
+                                      </div>
+                                    `).join('')}
+                                  </div>
+                                </div>
+                              `).join('')}
+                              ${teamsOffForReportDate.length > 0 ? `
+                                <div class="off-section">
+                                  <div class="off-title">Equipes de Folga (${teamsOffForReportDate.length})</div>
+                                  <div class="off-teams">
+                                    ${teamsOffForReportDate.map(team => `
+                                      <span class="off-badge">${team.name}</span>
+                                    `).join('')}
+                                  </div>
+                                </div>
+                              ` : ''}
+                            </body>
+                          </html>
+                        `);
+                        
+                        printWindow.document.close();
+                        printWindow.focus();
+                        setTimeout(() => {
+                          printWindow.print();
+                        }, 250);
+                      }}
+                      className="gap-2"
+                    >
+                      <Printer className="h-4 w-4" />
+                      Exportar Print
                     </Button>
                   </div>
                   
