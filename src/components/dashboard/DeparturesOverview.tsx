@@ -431,21 +431,19 @@ export function DeparturesOverview() {
   const overallPercentage = totalDepartures > 0 ? Math.round((totalDeparted / totalDepartures) * 100) : 0;
   const todayStats = dailyPercentages.find(d => d.date === today);
 
-  // Calculate team rankings by average departure time (delay from scheduled)
+  // Calculate team rankings by departure time for today only
   const teamRankings = (() => {
-    const teamDelays: Record<string, { name: string; totalDelay: number; count: number }> = {};
+    const todayDepartures = weeklyDepartures?.filter(dep => dep.date === today) || [];
+    const teamDelays: Record<string, { name: string; delayMinutes: number }> = {};
     
-    weeklyDepartures?.forEach(dep => {
+    todayDepartures.forEach(dep => {
       if (dep.departed && dep.departure_time && dep.teams) {
         const teamId = dep.teams.id;
         const teamName = dep.teams.name;
         const delay = calculateDelayMinutes(dep.departure_time, dep.scheduled_entry_time);
         
-        if (!teamDelays[teamId]) {
-          teamDelays[teamId] = { name: teamName, totalDelay: 0, count: 0 };
-        }
-        teamDelays[teamId].totalDelay += delay;
-        teamDelays[teamId].count += 1;
+        // Only one entry per team per day
+        teamDelays[teamId] = { name: teamName, delayMinutes: delay };
       }
     });
     
@@ -453,12 +451,12 @@ export function DeparturesOverview() {
       .map(([id, data]) => ({
         id,
         name: data.name,
-        avgDelayMinutes: Math.round(data.totalDelay / data.count),
+        delayMinutes: data.delayMinutes,
       }))
-      .sort((a, b) => a.avgDelayMinutes - b.avgDelayMinutes);
+      .sort((a, b) => a.delayMinutes - b.delayMinutes);
     
     const best = rankings.slice(0, 5);
-    const worst = [...rankings].sort((a, b) => b.avgDelayMinutes - a.avgDelayMinutes).slice(0, 5);
+    const worst = [...rankings].sort((a, b) => b.delayMinutes - a.delayMinutes).slice(0, 5);
     
     return { best, worst };
   })();
@@ -604,7 +602,7 @@ export function DeparturesOverview() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Trophy className="h-5 w-5 text-primary" />
-            Ranking de Equipes por Tempo de Saída (7 dias)
+            Ranking de Equipes por Tempo de Saída - Hoje
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -626,7 +624,7 @@ export function DeparturesOverview() {
                       <span className="text-sm font-medium text-foreground">{team.name}</span>
                     </div>
                     <span className="text-sm font-semibold text-green-600">
-                      {team.avgDelayMinutes >= 0 ? `+${team.avgDelayMinutes}` : team.avgDelayMinutes} min
+                      {team.delayMinutes >= 0 ? `+${team.delayMinutes}` : team.delayMinutes} min
                     </span>
                   </div>
                 ))}
@@ -648,7 +646,7 @@ export function DeparturesOverview() {
                       <span className="text-sm font-medium text-foreground">{team.name}</span>
                     </div>
                     <span className="text-sm font-semibold text-red-600">
-                      {team.avgDelayMinutes >= 0 ? `+${team.avgDelayMinutes}` : team.avgDelayMinutes} min
+                      {team.delayMinutes >= 0 ? `+${team.delayMinutes}` : team.delayMinutes} min
                     </span>
                   </div>
                 ))}
