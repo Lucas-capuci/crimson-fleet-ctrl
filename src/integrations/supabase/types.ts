@@ -284,6 +284,41 @@ export type Database = {
         }
         Relationships: []
       }
+      production_data: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          production_value: number
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          production_value: number
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          production_value?: number
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_data_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profile_permissions: {
         Row: {
           action: Database["public"]["Enums"]["permission_action"]

@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.manage-users]
 verify_jwt = false
+
+[functions.sync-production]
+verify_jwt = false

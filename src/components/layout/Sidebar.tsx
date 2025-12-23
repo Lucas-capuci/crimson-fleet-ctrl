@@ -12,6 +12,7 @@ import {
   LogOut,
   LogIn,
   CalendarDays,
+  BarChart3,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ const navItems: NavItem[] = [
   { title: "Saída", url: "/saida", icon: LogIn, page: "departures" },
   { title: "Oficina", url: "/oficina", icon: Building, page: "workshop" },
   { title: "Motoristas", url: "/motoristas", icon: Users, page: "drivers" },
+  { title: "Produção", url: "/producao", icon: BarChart3, page: "production" },
 ];
 
 export function Sidebar() {
