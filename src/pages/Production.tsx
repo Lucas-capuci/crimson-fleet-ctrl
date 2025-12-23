@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { BarChart3, TrendingUp, Calendar, RefreshCw, Users } from "lucide-react";
+import { BarChart3, TrendingUp, Calendar, RefreshCw, Users, UserCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line, CartesianGrid } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ProductionData {
   id: string;
@@ -24,6 +25,14 @@ interface ProductionData {
   };
 }
 
+interface SupervisorTeam {
+  supervisor_id: string;
+  team_id: string;
+  profiles: {
+    name: string;
+  } | null;
+}
+
 const chartConfig = {
   production: {
     label: "Produção",
@@ -32,8 +41,10 @@ const chartConfig = {
 };
 
 export default function Production() {
+  const { isAdmin } = useAuth();
   const [dateRange, setDateRange] = useState<string>("month");
   const [selectedTeam, setSelectedTeam] = useState<string>("all");
+  const [selectedSupervisor, setSelectedSupervisor] = useState<string>("all");
 
   // Calculate date range
   const getDateRange = () => {
@@ -52,9 +63,41 @@ export default function Production() {
 
   const { start, end } = getDateRange();
 
+  // Fetch supervisor-team assignments
+  const { data: supervisorTeams = [] } = useQuery({
+    queryKey: ["supervisor_teams_for_production"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("supervisor_teams")
+        .select(`
+          supervisor_id,
+          team_id,
+          profiles:supervisor_id (name)
+        `);
+      if (error) throw error;
+      return data as unknown as SupervisorTeam[];
+    },
+    enabled: isAdmin,
+  });
+
+  // Get unique supervisors for filter
+  const supervisors = Array.from(
+    new Map(
+      supervisorTeams.map((st) => [
+        st.supervisor_id,
+        { id: st.supervisor_id, name: st.profiles?.name || "Desconhecido" },
+      ])
+    ).values()
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  // Get team IDs for selected supervisor
+  const supervisorTeamIds = selectedSupervisor !== "all"
+    ? supervisorTeams.filter((st) => st.supervisor_id === selectedSupervisor).map((st) => st.team_id)
+    : [];
+
   // Fetch production data
   const { data: productionData = [], isLoading, refetch } = useQuery({
-    queryKey: ["production_data", dateRange, selectedTeam],
+    queryKey: ["production_data", dateRange, selectedTeam, selectedSupervisor],
     queryFn: async () => {
       let query = supabase
         .from("production_data")
@@ -71,6 +114,8 @@ export default function Production() {
 
       if (selectedTeam !== "all") {
         query = query.eq("team_id", selectedTeam);
+      } else if (selectedSupervisor !== "all" && supervisorTeamIds.length > 0) {
+        query = query.in("team_id", supervisorTeamIds);
       }
 
       const { data, error } = await query;
@@ -81,12 +126,16 @@ export default function Production() {
 
   // Fetch teams for filter
   const { data: teams = [] } = useQuery({
-    queryKey: ["teams_for_production"],
+    queryKey: ["teams_for_production", selectedSupervisor],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("teams")
-        .select("id, name, type")
-        .order("name");
+      let query = supabase.from("teams").select("id, name, type").order("name");
+
+      // If supervisor is selected, only show their teams
+      if (selectedSupervisor !== "all" && supervisorTeamIds.length > 0) {
+        query = query.in("id", supervisorTeamIds);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
@@ -146,6 +195,28 @@ export default function Production() {
                 <SelectItem value="quarter">Últimos 90 dias</SelectItem>
               </SelectContent>
             </Select>
+            {isAdmin && (
+              <Select 
+                value={selectedSupervisor} 
+                onValueChange={(value) => {
+                  setSelectedSupervisor(value);
+                  setSelectedTeam("all"); // Reset team when supervisor changes
+                }}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <UserCheck className="mr-2 h-4 w-4" />
+                  <SelectValue placeholder="Todos supervisores" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos supervisores</SelectItem>
+                  {supervisors.map((supervisor) => (
+                    <SelectItem key={supervisor.id} value={supervisor.id}>
+                      {supervisor.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select value={selectedTeam} onValueChange={setSelectedTeam}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Todas as equipes" />
