@@ -423,6 +423,8 @@ export type Database = {
           has_basket: boolean
           id: string
           name: string
+          scheduled_entry_time: string
+          scheduled_exit_time: string
           show_in_departures: boolean
           type: Database["public"]["Enums"]["team_type"]
           updated_at: string
@@ -433,6 +435,8 @@ export type Database = {
           has_basket?: boolean
           id?: string
           name: string
+          scheduled_entry_time?: string
+          scheduled_exit_time?: string
           show_in_departures?: boolean
           type: Database["public"]["Enums"]["team_type"]
           updated_at?: string
@@ -443,6 +447,8 @@ export type Database = {
           has_basket?: boolean
           id?: string
           name?: string
+          scheduled_entry_time?: string
+          scheduled_exit_time?: string
           show_in_departures?: boolean
           type?: Database["public"]["Enums"]["team_type"]
           updated_at?: string

@@ -63,7 +63,7 @@ export function DeparturesOverview() {
       const startDate = format(subDays(new Date(), 7), "yyyy-MM-dd");
       const { data, error } = await supabase
         .from("departures")
-        .select(`*, teams!inner(id, name, type)`)
+        .select(`*, teams!inner(id, name, type, scheduled_entry_time)`)
         .gte("date", startDate);
       if (error) throw error;
       
@@ -75,19 +75,6 @@ export function DeparturesOverview() {
         .in("id", supervisorIds);
       
       const profilesMap = new Map(profiles?.map(p => [p.id, p.name]) || []);
-
-      // Fetch team schedules to get scheduled entry times
-      const teamIds = [...new Set(data.map(d => d.team_id))];
-      const dates = [...new Set(data.map(d => d.date))];
-      const { data: schedules } = await supabase
-        .from("team_schedules")
-        .select("team_id, date, scheduled_entry_time")
-        .in("team_id", teamIds)
-        .in("date", dates);
-
-      const scheduleMap = new Map(
-        schedules?.map(s => [`${s.team_id}-${s.date}`, s.scheduled_entry_time]) || []
-      );
       
       return data.map(d => ({
         id: d.id,
@@ -97,7 +84,7 @@ export function DeparturesOverview() {
         teams: d.teams,
         date: d.date,
         supervisorName: profilesMap.get(d.supervisor_id) || "-",
-        scheduled_entry_time: scheduleMap.get(`${d.team_id}-${d.date}`) || "07:00:00"
+        scheduled_entry_time: d.teams?.scheduled_entry_time || "07:00:00"
       })) as DepartureRecord[];
     },
   });
@@ -108,7 +95,7 @@ export function DeparturesOverview() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("departures")
-        .select("id, departed, departure_time, no_departure_reason, supervisor_id, date, team_id, teams(id, name, type)")
+        .select("id, departed, departure_time, no_departure_reason, supervisor_id, date, team_id, teams(id, name, type, scheduled_entry_time)")
         .eq("date", today)
         .order("created_at", { ascending: false })
         .limit(10);
@@ -121,18 +108,6 @@ export function DeparturesOverview() {
         .in("id", supervisorIds);
       
       const profilesMap = new Map(profiles?.map(p => [p.id, p.name]) || []);
-
-      // Fetch team schedules for today
-      const teamIds = [...new Set(data.map(d => d.team_id))];
-      const { data: schedules } = await supabase
-        .from("team_schedules")
-        .select("team_id, date, scheduled_entry_time")
-        .in("team_id", teamIds)
-        .eq("date", today);
-
-      const scheduleMap = new Map(
-        schedules?.map(s => [`${s.team_id}-${s.date}`, s.scheduled_entry_time]) || []
-      );
       
       return data
         .filter(d => d.teams !== null)
@@ -144,7 +119,7 @@ export function DeparturesOverview() {
           teams: d.teams,
           date: d.date,
           supervisorName: profilesMap.get(d.supervisor_id) || "-",
-          scheduled_entry_time: scheduleMap.get(`${d.team_id}-${d.date}`) || "07:00:00"
+          scheduled_entry_time: d.teams?.scheduled_entry_time || "07:00:00"
         })) as DepartureRecord[];
     },
   });
