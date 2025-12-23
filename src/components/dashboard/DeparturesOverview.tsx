@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/integrations/supabase/client";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CheckCircle2, XCircle, Clock, TrendingUp, Users, Copy } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, TrendingUp, Users, Copy, Trophy, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ExportButton } from "@/components/ExportButton";
@@ -431,6 +431,38 @@ export function DeparturesOverview() {
   const overallPercentage = totalDepartures > 0 ? Math.round((totalDeparted / totalDepartures) * 100) : 0;
   const todayStats = dailyPercentages.find(d => d.date === today);
 
+  // Calculate team rankings by average departure time (delay from scheduled)
+  const teamRankings = (() => {
+    const teamDelays: Record<string, { name: string; totalDelay: number; count: number }> = {};
+    
+    weeklyDepartures?.forEach(dep => {
+      if (dep.departed && dep.departure_time && dep.teams) {
+        const teamId = dep.teams.id;
+        const teamName = dep.teams.name;
+        const delay = calculateDelayMinutes(dep.departure_time, dep.scheduled_entry_time);
+        
+        if (!teamDelays[teamId]) {
+          teamDelays[teamId] = { name: teamName, totalDelay: 0, count: 0 };
+        }
+        teamDelays[teamId].totalDelay += delay;
+        teamDelays[teamId].count += 1;
+      }
+    });
+    
+    const rankings = Object.entries(teamDelays)
+      .map(([id, data]) => ({
+        id,
+        name: data.name,
+        avgDelayMinutes: Math.round(data.totalDelay / data.count),
+      }))
+      .sort((a, b) => a.avgDelayMinutes - b.avgDelayMinutes);
+    
+    const best = rankings.slice(0, 5);
+    const worst = [...rankings].sort((a, b) => b.avgDelayMinutes - a.avgDelayMinutes).slice(0, 5);
+    
+    return { best, worst };
+  })();
+
   // CSV columns for departures
   const departuresCsvColumns: CsvColumn[] = [
     { key: "date", header: "Data", format: (v) => format(new Date(v + "T12:00:00"), "dd/MM/yyyy") },
@@ -560,6 +592,67 @@ export function DeparturesOverview() {
                   <span className="text-xs text-muted-foreground w-14">({day.departed}/{day.total})</span>
                 </div>
               ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm">Nenhum dado de saída registrado</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Team Rankings by Departure Time */}
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-primary" />
+            Ranking de Equipes por Tempo de Saída (7 dias)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {teamRankings.best.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Best Teams */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-4">
+                  <Trophy className="h-4 w-4 text-green-500" />
+                  <h4 className="font-medium text-foreground">Melhores Tempos</h4>
+                </div>
+                {teamRankings.best.map((team, index) => (
+                  <div 
+                    key={team.id} 
+                    className="flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/20"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-bold text-green-600 w-6">{index + 1}º</span>
+                      <span className="text-sm font-medium text-foreground">{team.name}</span>
+                    </div>
+                    <span className="text-sm font-semibold text-green-600">
+                      {team.avgDelayMinutes >= 0 ? `+${team.avgDelayMinutes}` : team.avgDelayMinutes} min
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Worst Teams */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-4">
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                  <h4 className="font-medium text-foreground">Piores Tempos</h4>
+                </div>
+                {teamRankings.worst.map((team, index) => (
+                  <div 
+                    key={team.id} 
+                    className="flex items-center justify-between p-3 rounded-lg bg-red-500/10 border border-red-500/20"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-bold text-red-600 w-6">{index + 1}º</span>
+                      <span className="text-sm font-medium text-foreground">{team.name}</span>
+                    </div>
+                    <span className="text-sm font-semibold text-red-600">
+                      {team.avgDelayMinutes >= 0 ? `+${team.avgDelayMinutes}` : team.avgDelayMinutes} min
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <p className="text-muted-foreground text-sm">Nenhum dado de saída registrado</p>
