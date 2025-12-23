@@ -39,14 +39,44 @@ const Dashboard = () => {
     queryKey: ["dashboard_departures_count"],
     queryFn: async () => {
       const today = format(new Date(), "yyyy-MM-dd");
-      const { data, error } = await supabase
+      const dayOfWeek = new Date().getDay();
+      
+      // Get teams scheduled to work today from team_schedules
+      const { data: scheduledTeams, error: scheduleError } = await supabase
+        .from("team_schedules")
+        .select("team_id")
+        .eq("date", today)
+        .eq("is_working", true);
+      
+      // Get teams that should show in departures
+      const { data: teamsWithDepartures, error: teamsError } = await supabase
+        .from("teams")
+        .select("id")
+        .eq("show_in_departures", true);
+      
+      if (teamsError) throw teamsError;
+      
+      // If there's schedule data for today, use it; otherwise count all teams with show_in_departures
+      let scheduledCount = 0;
+      if (scheduledTeams && scheduledTeams.length > 0) {
+        // Filter scheduled teams to only those with show_in_departures
+        const scheduledTeamIds = scheduledTeams.map(s => s.team_id);
+        const teamsWithDeparturesIds = teamsWithDepartures?.map(t => t.id) || [];
+        scheduledCount = scheduledTeamIds.filter(id => teamsWithDeparturesIds.includes(id)).length;
+      } else {
+        // No schedule for today, assume all teams with show_in_departures are scheduled
+        scheduledCount = teamsWithDepartures?.length || 0;
+      }
+      
+      // Get actual departures for today
+      const { data: departures, error: depError } = await supabase
         .from("departures")
         .select("departed")
         .eq("date", today);
-      if (error) throw error;
+      if (depError) throw depError;
       
-      const departed = data.filter(d => d.departed).length;
-      return { total: data.length, departed };
+      const departed = departures?.filter(d => d.departed).length || 0;
+      return { total: scheduledCount, departed };
     },
   });
 
