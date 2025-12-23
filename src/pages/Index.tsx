@@ -39,16 +39,8 @@ const Dashboard = () => {
     queryKey: ["dashboard_departures_count"],
     queryFn: async () => {
       const today = format(new Date(), "yyyy-MM-dd");
-      const dayOfWeek = new Date().getDay();
       
-      // Get teams scheduled to work today from team_schedules
-      const { data: scheduledTeams, error: scheduleError } = await supabase
-        .from("team_schedules")
-        .select("team_id")
-        .eq("date", today)
-        .eq("is_working", true);
-      
-      // Get teams that should show in departures
+      // Get all teams that should show in departures
       const { data: teamsWithDepartures, error: teamsError } = await supabase
         .from("teams")
         .select("id")
@@ -56,17 +48,19 @@ const Dashboard = () => {
       
       if (teamsError) throw teamsError;
       
-      // If there's schedule data for today, use it; otherwise count all teams with show_in_departures
-      let scheduledCount = 0;
-      if (scheduledTeams && scheduledTeams.length > 0) {
-        // Filter scheduled teams to only those with show_in_departures
-        const scheduledTeamIds = scheduledTeams.map(s => s.team_id);
-        const teamsWithDeparturesIds = teamsWithDepartures?.map(t => t.id) || [];
-        scheduledCount = scheduledTeamIds.filter(id => teamsWithDeparturesIds.includes(id)).length;
-      } else {
-        // No schedule for today, assume all teams with show_in_departures are scheduled
-        scheduledCount = teamsWithDepartures?.length || 0;
-      }
+      const allTeamIds = teamsWithDepartures?.map(t => t.id) || [];
+      
+      // Get teams scheduled NOT to work today (is_working = false)
+      const { data: notWorkingToday } = await supabase
+        .from("team_schedules")
+        .select("team_id")
+        .eq("date", today)
+        .eq("is_working", false);
+      
+      const notWorkingIds = notWorkingToday?.map(s => s.team_id) || [];
+      
+      // Scheduled count = all teams with show_in_departures minus those explicitly marked as not working
+      const scheduledCount = allTeamIds.filter(id => !notWorkingIds.includes(id)).length;
       
       // Get actual departures for today
       const { data: departures, error: depError } = await supabase
