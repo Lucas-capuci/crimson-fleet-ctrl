@@ -114,6 +114,19 @@ export function usePermissions() {
     enabled: !!user?.id,
   });
 
+  // Get the user's current profile name
+  const getUserProfileName = (): string | null => {
+    if (!userPermission?.profile_id) return null;
+    const profile = profiles.find((p) => p.id === userPermission.profile_id);
+    return profile?.name || null;
+  };
+
+  // Check if user has the "Frotas" profile
+  const isFrotasProfile = (): boolean => {
+    const profileName = getUserProfileName();
+    return profileName?.toLowerCase() === "frotas";
+  };
+
   // Check if user has a specific permission
   const hasPermission = (page: PageName, action: PermissionAction): boolean => {
     // Admins have all permissions
@@ -159,6 +172,8 @@ export function usePermissions() {
     hasPermission,
     canViewPage,
     getProfilePermissions,
+    getUserProfileName,
+    isFrotasProfile,
     isLoading: !profiles.length,
   };
 }
