@@ -38,13 +38,23 @@ const navItems: NavItem[] = [
   { title: "Produção", url: "/producao", icon: BarChart3, page: "production" },
 ];
 
+// Pages allowed for Frotas profile
+const FROTAS_ALLOWED_PAGES: PageName[] = ["vehicles", "workshop"];
+
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, isAdmin, userRole, signOut } = useAuth();
-  const { canViewPage } = usePermissions();
+  const { canViewPage, isFrotasProfile } = usePermissions();
 
   // Filter nav items based on permissions
-  const visibleNavItems = navItems.filter((item) => canViewPage(item.page));
+  let visibleNavItems = navItems.filter((item) => canViewPage(item.page));
+
+  // If user has Frotas profile, restrict to only vehicles and workshop
+  if (isFrotasProfile()) {
+    visibleNavItems = visibleNavItems.filter((item) => 
+      FROTAS_ALLOWED_PAGES.includes(item.page)
+    );
+  }
 
   // Add admin page only if user is admin (not gestor)
   const allNavItems = userRole === "admin"
