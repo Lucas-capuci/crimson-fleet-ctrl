@@ -36,6 +36,7 @@ interface WorkshopEntry {
   vehicle_id: string;
   entry_date: string;
   exit_date: string | null;
+  predicted_exit_date: string | null;
   reason: string;
   status: MaintenanceStatus;
   notes: string | null;
@@ -72,6 +73,7 @@ const Workshop = () => {
   const [formData, setFormData] = useState({
     team_id: "",
     entry_date: new Date().toISOString().split("T")[0],
+    predicted_exit_date: "",
     reason: "",
     notes: "",
   });
@@ -136,6 +138,7 @@ const Workshop = () => {
       const { error } = await supabase.from("workshop_entries").insert({
         vehicle_id: team.vehicles.id,
         entry_date: new Date(data.entry_date).toISOString(),
+        predicted_exit_date: data.predicted_exit_date ? new Date(data.predicted_exit_date).toISOString() : null,
         reason: data.reason,
         notes: data.notes || null,
         status: "em_andamento" as MaintenanceStatus,
@@ -193,6 +196,7 @@ const Workshop = () => {
     { key: "vehicles", header: "Equipe", format: (v) => getTeamName(v?.team_id || null) },
     { key: "reason", header: "Motivo" },
     { key: "entry_date", header: "Entrada", format: (v) => formatDateTime(v) },
+    { key: "predicted_exit_date", header: "Previsão Saída", format: (v) => formatDateTime(v) },
     { key: "exit_date", header: "Saída", format: (v) => formatDateTime(v) },
     { key: "status", header: "Status", format: (v) => statusConfig[v as MaintenanceStatus]?.label || v },
     { key: "notes", header: "Observações", format: (v) => v || "-" },
@@ -236,7 +240,8 @@ const Workshop = () => {
   const resetForm = () => {
     setFormData({ 
       team_id: "", 
-      entry_date: new Date().toISOString().split("T")[0], 
+      entry_date: new Date().toISOString().split("T")[0],
+      predicted_exit_date: "",
       reason: "", 
       notes: "" 
     });
@@ -283,6 +288,12 @@ const Workshop = () => {
               <Calendar className="h-4 w-4" />
               Entrada: {new Date(entry.entry_date).toLocaleDateString("pt-BR")}
             </div>
+            {entry.predicted_exit_date && !entry.exit_date && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                Previsão: {new Date(entry.predicted_exit_date).toLocaleDateString("pt-BR")}
+              </div>
+            )}
             {entry.exit_date && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <LogOut className="h-4 w-4" />
@@ -359,15 +370,28 @@ const Workshop = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="entry_date">Data de Entrada</Label>
-                <Input
-                  id="entry_date"
-                  type="date"
-                  value={formData.entry_date}
-                  onChange={(e) => setFormData({ ...formData, entry_date: e.target.value })}
-                  required
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="entry_date">Data de Entrada</Label>
+                  <Input
+                    id="entry_date"
+                    type="date"
+                    value={formData.entry_date}
+                    onChange={(e) => setFormData({ ...formData, entry_date: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="predicted_exit_date">Previsão de Saída</Label>
+                  <Input
+                    id="predicted_exit_date"
+                    type="date"
+                    value={formData.predicted_exit_date}
+                    onChange={(e) => setFormData({ ...formData, predicted_exit_date: e.target.value })}
+                    min={formData.entry_date}
+                    required
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="reason">Motivo da Entrada</Label>
