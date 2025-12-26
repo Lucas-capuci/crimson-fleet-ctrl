@@ -618,6 +618,7 @@ export type Database = {
           exit_date: string | null
           id: string
           notes: string | null
+          predicted_exit_date: string | null
           reason: string
           status: Database["public"]["Enums"]["maintenance_status"]
           updated_at: string
@@ -629,6 +630,7 @@ export type Database = {
           exit_date?: string | null
           id?: string
           notes?: string | null
+          predicted_exit_date?: string | null
           reason: string
           status?: Database["public"]["Enums"]["maintenance_status"]
           updated_at?: string
@@ -640,6 +642,7 @@ export type Database = {
           exit_date?: string | null
           id?: string
           notes?: string | null
+          predicted_exit_date?: string | null
           reason?: string
           status?: Database["public"]["Enums"]["maintenance_status"]
           updated_at?: string
