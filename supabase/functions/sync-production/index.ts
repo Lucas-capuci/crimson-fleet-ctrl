@@ -5,6 +5,91 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Mapping from external codes to internal team names
+const TEAM_CODE_MAPPING: Record<string, string> = {
+  '803006A': 'GOOO101M',
+  '803006': 'GOOO101M',
+  '803007A': 'GOOO102M',
+  '803007': 'GOOO102M',
+  '803008A': 'GOOO103M',
+  '803008': 'GOOO103M',
+  '803010A': 'GOOO105M',
+  '803010': 'GOOO105M',
+  '703014A': 'GOOV101M',
+  '703014': 'GOOV101M',
+  '703017A': 'GOOV104M',
+  '703017': 'GOOV104M',
+  '803009A': 'GOOO104M',
+  '803009': 'GOOO104M',
+  '803011A': 'GOOO106M',
+  '803011': 'GOOO106M',
+  '803012A': 'GOOO107M',
+  '803012': 'GOOO107M',
+  '803013A': 'GOOO108M',
+  '803013': 'GOOO108M',
+  '703015A': 'GOOV102M',
+  '703015': 'GOOV102M',
+  '703016A': 'GOOV103M',
+  '703016': 'GOOV103M',
+  '703000A': 'GOOV001M',
+  '703000': 'GOOV001M',
+  '703001A': 'GOOV002M',
+  '703001': 'GOOV002M',
+  '703002A': 'GOOV003M',
+  '703002': 'GOOV003M',
+  '703003A': 'GOOV004M',
+  '703003': 'GOOV004M',
+  '703004A': 'GOOV005M',
+  '703004': 'GOOV005M',
+  '703005A': 'GOOV006M',
+  '703005': 'GOOV006M',
+  '703006A': 'GOOP001M',
+  '703006': 'GOOP001M',
+  '703007A': 'GOOP002M',
+  '703007': 'GOOP002M',
+  '703008A': 'GOOP003M',
+  '703008': 'GOOP003M',
+  '703009A': 'GOOP004M',
+  '703009': 'GOOP004M',
+  '703010A': 'GOOP005M',
+  '703010': 'GOOP005M',
+  '703011A': 'GOOP006M',
+  '703011': 'GOOP006M',
+  '703012A': 'GOOP007M',
+  '703012': 'GOOP007M',
+  '703013A': 'GOOP008M',
+  '703013': 'GOOP008M',
+  '803000A': 'GOOO001M',
+  '803000': 'GOOO001M',
+  '803001A': 'GOOO002M',
+  '803001': 'GOOO002M',
+  '803002A': 'GOOO003M',
+  '803002': 'GOOO003M',
+  '803003A': 'GOOO004M',
+  '803003': 'GOOO004M',
+  '803004A': 'GOOO005M',
+  '803004': 'GOOO005M',
+  '803005A': 'GOOO006M',
+  '803005': 'GOOO006M',
+}
+
+// Function to convert external code to internal team name
+function convertTeamCode(externalCode: string): string {
+  // First try exact match
+  if (TEAM_CODE_MAPPING[externalCode]) {
+    return TEAM_CODE_MAPPING[externalCode]
+  }
+  
+  // Try without trailing 'A' if present
+  const codeWithoutA = externalCode.replace(/A$/i, '')
+  if (TEAM_CODE_MAPPING[codeWithoutA]) {
+    return TEAM_CODE_MAPPING[codeWithoutA]
+  }
+  
+  // Return original if no mapping found
+  return externalCode
+}
+
 interface ProductionRow {
   'CALENDÁRIO[Data]': string
   'ZCA010[ZCA_NUMOPE]': string
@@ -128,15 +213,18 @@ Deno.serve(async (req) => {
     let ignoredCount = 0
 
     for (const row of rows) {
-      const teamName = row['ZCA010[ZCA_NUMOPE]']
+      const rawTeamName = row['ZCA010[ZCA_NUMOPE]']
       const dateStr = row['CALENDÁRIO[Data]']
       const productionValue = row['[produção]']
+
+      // Convert external code to internal team name
+      const teamName = convertTeamCode(rawTeamName)
 
       // Check if team exists
       const teamId = teamMap.get(teamName)
       
       if (!teamId) {
-        console.log(`Ignoring row: team "${teamName}" not found`)
+        console.log(`Ignoring row: team "${rawTeamName}" -> "${teamName}" not found`)
         ignoredCount++
         continue
       }
