@@ -90,9 +90,15 @@ function convertTeamCode(externalCode: string): string {
   return externalCode
 }
 
+// Support both old and new field names
 interface ProductionRow {
-  'CALENDÁRIO[Data]': string
-  'ZCA010[ZCA_NUMOPE]': string
+  // Old format
+  'CALENDÁRIO[Data]'?: string
+  'ZCA010[ZCA_NUMOPE]'?: string
+  // New format
+  'Calendário[DATA]'?: string
+  'EQUIPE_SUPERVISÃO[PREFIXO N ]'?: string
+  // Common field
   '[produção]': number
 }
 
@@ -103,6 +109,82 @@ interface RequestBody {
       rows?: ProductionRow[]
     }>
   }>
+}
+
+// Function to try parsing concatenated JSONs
+function parseJSONWithFallback(rawBody: string): any[] {
+  const results: any[] = []
+  
+  // First, try normal parse
+  try {
+    const parsed = JSON.parse(rawBody)
+    return [parsed]
+  } catch (e) {
+    console.log('Normal JSON parse failed, trying to handle concatenated JSONs...')
+  }
+  
+  // Try to find and parse multiple JSON objects
+  let remaining = rawBody.trim()
+  let attempts = 0
+  const maxAttempts = 10 // Safety limit
+  
+  while (remaining.length > 0 && attempts < maxAttempts) {
+    attempts++
+    
+    // Find the matching closing bracket for the first opening bracket
+    let braceCount = 0
+    let inString = false
+    let escapeNext = false
+    let endIndex = -1
+    
+    for (let i = 0; i < remaining.length; i++) {
+      const char = remaining[i]
+      
+      if (escapeNext) {
+        escapeNext = false
+        continue
+      }
+      
+      if (char === '\\') {
+        escapeNext = true
+        continue
+      }
+      
+      if (char === '"' && !escapeNext) {
+        inString = !inString
+        continue
+      }
+      
+      if (!inString) {
+        if (char === '{' || char === '[') {
+          braceCount++
+        } else if (char === '}' || char === ']') {
+          braceCount--
+          if (braceCount === 0) {
+            endIndex = i + 1
+            break
+          }
+        }
+      }
+    }
+    
+    if (endIndex > 0) {
+      const jsonStr = remaining.substring(0, endIndex)
+      try {
+        const parsed = JSON.parse(jsonStr)
+        results.push(parsed)
+        console.log(`Parsed JSON object ${attempts}, length: ${jsonStr.length}`)
+      } catch (e) {
+        console.log(`Failed to parse JSON segment ${attempts}:`, e)
+        break
+      }
+      remaining = remaining.substring(endIndex).trim()
+    } else {
+      break
+    }
+  }
+  
+  return results
 }
 
 Deno.serve(async (req) => {
@@ -139,45 +221,58 @@ Deno.serve(async (req) => {
       )
     }
 
-    let body: any
-    try {
-      body = JSON.parse(rawBody)
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError)
+    // Try to parse (handles concatenated JSONs)
+    const parsedBodies = parseJSONWithFallback(rawBody)
+    
+    if (parsedBodies.length === 0) {
+      console.error('Failed to parse any JSON from body')
       console.log('Raw body preview:', rawBody.substring(0, 200))
       return new Response(
         JSON.stringify({ 
           error: 'Invalid JSON in request body',
-          details: parseError instanceof Error ? parseError.message : 'Unknown parse error'
+          details: 'Could not parse JSON data'
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
-
-    console.log('Received request body keys:', Object.keys(body))
-
-    // Detect and unwrap 'body' wrapper if present (Power Automate sends this)
-    let dataObj = body
-    if (body.body && typeof body.body === 'object') {
-      console.log('Detected body wrapper, unwrapping...')
-      dataObj = body.body
-      console.log('Unwrapped data keys:', Object.keys(dataObj))
-    }
-
-    // Extract rows from either firstTableRows or nested structure
-    let rows: ProductionRow[] = []
     
-    if (dataObj.firstTableRows && Array.isArray(dataObj.firstTableRows)) {
-      rows = dataObj.firstTableRows
-      console.log('Extracted rows from firstTableRows')
-    } else if (dataObj.results?.[0]?.tables?.[0]?.rows) {
-      rows = dataObj.results[0].tables[0].rows
-      console.log('Extracted rows from results[0].tables[0].rows')
+    console.log(`Parsed ${parsedBodies.length} JSON object(s) from request`)
+
+    // Extract rows from all parsed JSON bodies
+    let allRows: ProductionRow[] = []
+    
+    for (let i = 0; i < parsedBodies.length; i++) {
+      let body = parsedBodies[i]
+      console.log(`Processing JSON object ${i + 1}, keys:`, Object.keys(body))
+      
+      // Detect and unwrap 'body' wrapper if present (Power Automate sends this)
+      let dataObj = body
+      if (body.body && typeof body.body === 'object') {
+        console.log('Detected body wrapper, unwrapping...')
+        dataObj = body.body
+        console.log('Unwrapped data keys:', Object.keys(dataObj))
+      }
+
+      // Extract rows from various structures
+      let rows: ProductionRow[] = []
+      
+      if (dataObj.firstTableRows && Array.isArray(dataObj.firstTableRows)) {
+        rows = dataObj.firstTableRows
+        console.log(`Extracted ${rows.length} rows from firstTableRows`)
+      } else if (dataObj.results?.[0]?.tables?.[0]?.rows) {
+        rows = dataObj.results[0].tables[0].rows
+        console.log(`Extracted ${rows.length} rows from results[0].tables[0].rows`)
+      } else if (Array.isArray(dataObj)) {
+        // Direct array of rows
+        rows = dataObj
+        console.log(`Extracted ${rows.length} rows from direct array`)
+      }
+      
+      allRows = allRows.concat(rows)
     }
 
-    if (rows.length === 0) {
-      console.log('No rows found in request')
-      console.log('Data structure:', JSON.stringify(dataObj).substring(0, 300))
+    if (allRows.length === 0) {
+      console.log('No rows found in any JSON objects')
       return new Response(
         JSON.stringify({ 
           error: 'No data rows found in request', 
@@ -189,7 +284,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log(`Processing ${rows.length} rows`)
+    console.log(`Total rows to process: ${allRows.length}`)
 
     // Fetch all teams to create a name -> id map
     const { data: teams, error: teamsError } = await supabase
@@ -213,10 +308,17 @@ Deno.serve(async (req) => {
     const aggregatedData = new Map<string, { team_id: string; date: string; production_value: number }>()
     let ignoredCount = 0
 
-    for (const row of rows) {
-      const rawTeamName = row['ZCA010[ZCA_NUMOPE]']
-      const dateStr = row['CALENDÁRIO[Data]']
+    for (const row of allRows) {
+      // Support both old format (ZCA010[ZCA_NUMOPE]) and new format (EQUIPE_SUPERVISÃO[PREFIXO N ])
+      const rawTeamName = row['ZCA010[ZCA_NUMOPE]'] || row['EQUIPE_SUPERVISÃO[PREFIXO N ]']
+      // Support both old format (CALENDÁRIO[Data]) and new format (Calendário[DATA])
+      const dateStr = row['CALENDÁRIO[Data]'] || row['Calendário[DATA]']
       const productionValue = row['[produção]']
+
+      if (!rawTeamName) {
+        ignoredCount++
+        continue
+      }
 
       // Convert external code to internal team name
       const teamName = convertTeamCode(rawTeamName)
@@ -225,7 +327,6 @@ Deno.serve(async (req) => {
       const teamId = teamMap.get(teamName)
       
       if (!teamId) {
-        // Only log once per unique team to reduce noise
         ignoredCount++
         continue
       }
@@ -300,7 +401,7 @@ Deno.serve(async (req) => {
       success: true,
       inserted: insertedCount,
       ignored: ignoredCount,
-      total_received: rows.length,
+      total_received: allRows.length,
       timestamp: new Date().toISOString()
     }
 
