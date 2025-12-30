@@ -209,7 +209,8 @@ Deno.serve(async (req) => {
     console.log(`Found ${teamMap.size} registered teams`)
 
     // Process rows and filter only those with matching teams
-    const dataToInsert: Array<{ team_id: string; date: string; production_value: number }> = []
+    // Use a Map to aggregate duplicates (same team_id + date)
+    const aggregatedData = new Map<string, { team_id: string; date: string; production_value: number }>()
     let ignoredCount = 0
 
     for (const row of rows) {
@@ -224,7 +225,7 @@ Deno.serve(async (req) => {
       const teamId = teamMap.get(teamName)
       
       if (!teamId) {
-        console.log(`Ignoring row: team "${rawTeamName}" -> "${teamName}" not found`)
+        // Only log once per unique team to reduce noise
         ignoredCount++
         continue
       }
@@ -238,12 +239,25 @@ Deno.serve(async (req) => {
         continue
       }
 
-      dataToInsert.push({
-        team_id: teamId,
-        date: date,
-        production_value: productionValue
-      })
+      // Create a unique key for team_id + date
+      const key = `${teamId}_${date}`
+      
+      // If duplicate, sum the production values
+      if (aggregatedData.has(key)) {
+        const existing = aggregatedData.get(key)!
+        existing.production_value += productionValue
+        console.log(`Aggregating duplicate: ${teamName} on ${date}, new total: ${existing.production_value}`)
+      } else {
+        aggregatedData.set(key, {
+          team_id: teamId,
+          date: date,
+          production_value: productionValue
+        })
+      }
     }
+
+    // Convert Map to array
+    const dataToInsert = Array.from(aggregatedData.values())
 
     console.log(`Prepared ${dataToInsert.length} rows for insert, ${ignoredCount} ignored`)
 
