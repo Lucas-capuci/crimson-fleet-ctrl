@@ -15,6 +15,7 @@ import Departures from "./pages/Departures";
 import Schedule from "./pages/Schedule";
 import Admin from "./pages/Admin";
 import Production from "./pages/Production";
+import Budget from "./pages/Budget";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const App = () => (
             <Route path="/saida" element={<ProtectedRoute><Departures /></ProtectedRoute>} />
             <Route path="/oficina" element={<ProtectedRoute><Workshop /></ProtectedRoute>} />
             <Route path="/producao" element={<ProtectedRoute><Production /></ProtectedRoute>} />
+            <Route path="/orcamento" element={<ProtectedRoute><Budget /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

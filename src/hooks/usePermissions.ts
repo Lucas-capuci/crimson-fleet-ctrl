@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
 export type PermissionAction = "view" | "create" | "edit" | "delete" | "export";
-export type PageName = "dashboard" | "vehicles" | "drivers" | "teams" | "departures" | "maintenance" | "incidents" | "schedule" | "workshop" | "admin" | "production";
+export type PageName = "dashboard" | "vehicles" | "drivers" | "teams" | "departures" | "maintenance" | "incidents" | "schedule" | "workshop" | "admin" | "production" | "budget";
 
 export const PAGE_LABELS: Record<PageName, string> = {
   dashboard: "Dashboard",
@@ -17,6 +17,7 @@ export const PAGE_LABELS: Record<PageName, string> = {
   workshop: "Oficina",
   admin: "Administração",
   production: "Produção",
+  budget: "Orçamento",
 };
 
 export const ACTION_LABELS: Record<PermissionAction, string> = {

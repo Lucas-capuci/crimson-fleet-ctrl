@@ -257,6 +257,84 @@ export type Database = {
           },
         ]
       }
+      ose_items: {
+        Row: {
+          created_at: string
+          id: string
+          ose_id: string
+          quantity: number
+          service_id: string
+          total_price: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ose_id: string
+          quantity?: number
+          service_id: string
+          total_price: number
+          unit_price: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ose_id?: string
+          quantity?: number
+          service_id?: string
+          total_price?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ose_items_ose_id_fkey"
+            columns: ["ose_id"]
+            isOneToOne: false
+            referencedRelation: "oses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ose_items_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "service_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      oses: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          ose_number: string
+          status: string
+          total_value: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          ose_number: string
+          status?: string
+          total_value?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          ose_number?: string
+          status?: string
+          total_value?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       permission_profiles: {
         Row: {
           created_at: string
@@ -375,6 +453,39 @@ export type Database = {
           name?: string
           updated_at?: string
           username?: string | null
+        }
+        Relationships: []
+      }
+      service_catalog: {
+        Row: {
+          created_at: string
+          description: string
+          gross_price: number
+          id: string
+          service_number: string
+          unit: string
+          up: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          gross_price: number
+          id?: string
+          service_number: string
+          unit: string
+          up: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          gross_price?: number
+          id?: string
+          service_number?: string
+          unit?: string
+          up?: string
+          updated_at?: string
         }
         Relationships: []
       }
