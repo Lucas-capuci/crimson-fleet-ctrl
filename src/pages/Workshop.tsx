@@ -1,17 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +14,20 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Wrench, Clock, CheckCircle, Calendar, LogOut } from "lucide-react";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Plus, Search, Wrench, Clock, CheckCircle, Calendar, LogOut, Edit, ChevronsUpDown, Check } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn, formatDateTime } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
@@ -30,6 +36,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { differenceInHours, differenceInDays } from "date-fns";
 
 type MaintenanceStatus = "pendente" | "em_andamento" | "concluida";
+
+interface Vehicle {
+  id: string;
+  plate: string;
+  model: string;
+  team_id: string | null;
+}
 
 interface WorkshopEntry {
   id: string;
@@ -68,14 +81,24 @@ const Workshop = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isExitDialogOpen, setIsExitDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<WorkshopEntry | null>(null);
   const [exitDate, setExitDate] = useState("");
+  const [plateSearchOpen, setPlateSearchOpen] = useState(false);
+  const [plateSearch, setPlateSearch] = useState("");
   const [formData, setFormData] = useState({
-    team_id: "",
+    vehicle_id: "",
     entry_date: new Date().toISOString().split("T")[0],
     predicted_exit_date: "",
     reason: "",
     notes: "",
+  });
+  const [editFormData, setEditFormData] = useState({
+    entry_date: "",
+    predicted_exit_date: "",
+    reason: "",
+    notes: "",
+    status: "em_andamento" as MaintenanceStatus,
   });
 
   const { data: entries = [], isLoading } = useQuery({
@@ -117,6 +140,28 @@ const Workshop = () => {
     },
   });
 
+  const { data: allVehicles = [] } = useQuery({
+    queryKey: ["all_vehicles"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vehicles")
+        .select("id, plate, model, team_id")
+        .order("plate");
+      if (error) throw error;
+      return data as Vehicle[];
+    },
+  });
+
+  const filteredVehicles = useMemo(() => {
+    if (!plateSearch) return allVehicles;
+    return allVehicles.filter(v => 
+      v.plate.toLowerCase().includes(plateSearch.toLowerCase()) ||
+      v.model.toLowerCase().includes(plateSearch.toLowerCase())
+    );
+  }, [allVehicles, plateSearch]);
+
+  const selectedVehicle = allVehicles.find(v => v.id === formData.vehicle_id);
+
   const { data: teamsMap = {} } = useQuery({
     queryKey: ["teams_map"],
     queryFn: async () => {
@@ -132,11 +177,10 @@ const Workshop = () => {
 
   const createEntry = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const team = teams.find(t => t.id === data.team_id);
-      if (!team?.vehicles) throw new Error("Equipe sem veículo vinculado");
+      if (!data.vehicle_id) throw new Error("Veículo não selecionado");
       
       const { error } = await supabase.from("workshop_entries").insert({
-        vehicle_id: team.vehicles.id,
+        vehicle_id: data.vehicle_id,
         entry_date: new Date(data.entry_date).toISOString(),
         predicted_exit_date: data.predicted_exit_date ? new Date(data.predicted_exit_date).toISOString() : null,
         reason: data.reason,
@@ -146,16 +190,42 @@ const Workshop = () => {
       if (error) throw error;
       
       // Update vehicle status to oficina
-      await supabase.from("vehicles").update({ status: "oficina" }).eq("id", team.vehicles.id);
+      await supabase.from("vehicles").update({ status: "oficina" }).eq("id", data.vehicle_id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workshop_entries"] });
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      queryClient.invalidateQueries({ queryKey: ["all_vehicles"] });
       toast({ title: "Entrada na oficina registrada!" });
       resetForm();
     },
     onError: (error) => {
       toast({ title: "Erro ao registrar entrada", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateEntry = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof editFormData }) => {
+      const { error } = await supabase
+        .from("workshop_entries")
+        .update({
+          entry_date: new Date(data.entry_date).toISOString(),
+          predicted_exit_date: data.predicted_exit_date ? new Date(data.predicted_exit_date).toISOString() : null,
+          reason: data.reason,
+          notes: data.notes || null,
+          status: data.status,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workshop_entries"] });
+      toast({ title: "Entrada atualizada!" });
+      setIsEditDialogOpen(false);
+      setSelectedEntry(null);
+    },
+    onError: (error) => {
+      toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
     },
   });
 
@@ -237,18 +307,36 @@ const Workshop = () => {
     setIsExitDialogOpen(true);
   };
 
+  const openEditDialog = (entry: WorkshopEntry) => {
+    setSelectedEntry(entry);
+    setEditFormData({
+      entry_date: new Date(entry.entry_date).toISOString().split("T")[0],
+      predicted_exit_date: entry.predicted_exit_date ? new Date(entry.predicted_exit_date).toISOString().split("T")[0] : "",
+      reason: entry.reason,
+      notes: entry.notes || "",
+      status: entry.status,
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedEntry) {
+      updateEntry.mutate({ id: selectedEntry.id, data: editFormData });
+    }
+  };
+
   const resetForm = () => {
     setFormData({ 
-      team_id: "", 
+      vehicle_id: "", 
       entry_date: new Date().toISOString().split("T")[0],
       predicted_exit_date: "",
       reason: "", 
       notes: "" 
     });
+    setPlateSearch("");
     setIsDialogOpen(false);
   };
-
-  const teamsWithVehicles = teams.filter(t => t.vehicles);
 
   const EntryCard = ({ entry }: { entry: WorkshopEntry }) => {
     const status = statusConfig[entry.status];
@@ -305,12 +393,18 @@ const Workshop = () => {
               <span className="font-medium text-primary">Tempo parado: {downtime}</span>
             </div>
           </div>
-          {entry.status !== "concluida" && (
-            <Button size="sm" onClick={() => openExitDialog(entry)} className="gap-2">
-              <LogOut className="h-4 w-4" />
-              Registrar Saída
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => openEditDialog(entry)} className="gap-2">
+              <Edit className="h-4 w-4" />
+              Editar
             </Button>
-          )}
+            {entry.status !== "concluida" && (
+              <Button size="sm" onClick={() => openExitDialog(entry)} className="gap-2">
+                <LogOut className="h-4 w-4" />
+                Registrar Saída
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -353,22 +447,54 @@ const Workshop = () => {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="team">Equipe</Label>
-                <Select
-                  value={formData.team_id}
-                  onValueChange={(value) => setFormData({ ...formData, team_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a equipe" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teamsWithVehicles.map((team) => (
-                      <SelectItem key={team.id} value={team.id}>
-                        {team.name} ({team.vehicles?.plate})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Placa do Veículo</Label>
+                <Popover open={plateSearchOpen} onOpenChange={setPlateSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={plateSearchOpen}
+                      className="w-full justify-between"
+                    >
+                      {selectedVehicle 
+                        ? `${selectedVehicle.plate} - ${selectedVehicle.model}`
+                        : "Buscar por placa..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <Command>
+                      <CommandInput 
+                        placeholder="Digite a placa..." 
+                        value={plateSearch}
+                        onValueChange={setPlateSearch}
+                      />
+                      <CommandList>
+                        <CommandEmpty>Nenhum veículo encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          {filteredVehicles.map((vehicle) => (
+                            <CommandItem
+                              key={vehicle.id}
+                              value={vehicle.plate}
+                              onSelect={() => {
+                                setFormData({ ...formData, vehicle_id: vehicle.id });
+                                setPlateSearchOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.vehicle_id === vehicle.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {vehicle.plate} - {vehicle.model}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -417,8 +543,74 @@ const Workshop = () => {
                 <Button type="button" variant="outline" onClick={resetForm}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={createEntry.isPending || !formData.team_id}>
+                <Button type="submit" disabled={createEntry.isPending || !formData.vehicle_id}>
                   Registrar
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Editar Entrada</DialogTitle>
+              <DialogDescription>
+                {selectedEntry && (
+                  <>Veículo: {selectedEntry.vehicles?.plate} - {selectedEntry.vehicles?.model}</>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit_entry_date">Data de Entrada</Label>
+                  <Input
+                    id="edit_entry_date"
+                    type="date"
+                    value={editFormData.entry_date}
+                    onChange={(e) => setEditFormData({ ...editFormData, entry_date: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit_predicted_exit_date">Previsão de Saída</Label>
+                  <Input
+                    id="edit_predicted_exit_date"
+                    type="date"
+                    value={editFormData.predicted_exit_date}
+                    onChange={(e) => setEditFormData({ ...editFormData, predicted_exit_date: e.target.value })}
+                    min={editFormData.entry_date}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_reason">Motivo da Entrada</Label>
+                <Input
+                  id="edit_reason"
+                  value={editFormData.reason}
+                  onChange={(e) => setEditFormData({ ...editFormData, reason: e.target.value })}
+                  placeholder="Descreva o motivo..."
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_notes">Observações (opcional)</Label>
+                <Textarea
+                  id="edit_notes"
+                  value={editFormData.notes}
+                  onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                  placeholder="Observações adicionais..."
+                  rows={3}
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={updateEntry.isPending}>
+                  Salvar
                 </Button>
               </div>
             </form>
