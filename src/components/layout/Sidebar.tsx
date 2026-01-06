@@ -13,6 +13,7 @@ import {
   LogIn,
   CalendarDays,
   BarChart3,
+  FileText,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ const navItems: NavItem[] = [
   { title: "Oficina", url: "/oficina", icon: Building, page: "workshop" },
   { title: "Motoristas", url: "/motoristas", icon: Users, page: "drivers" },
   { title: "Produção", url: "/producao", icon: BarChart3, page: "production" },
+  { title: "Orçamento", url: "/orcamento", icon: FileText, page: "budget" as PageName },
 ];
 
 // Pages allowed for Frotas profile
