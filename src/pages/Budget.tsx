@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { Calendar } from "@/components/ui/calendar";
-import { Plus, Search, Trash2, Save, FileText, Check, ChevronsUpDown, Package, CalendarIcon, Users } from "lucide-react";
+import { Plus, Search, Trash2, Save, Check, ChevronsUpDown, CalendarIcon, Users, BarChart3, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -43,9 +43,8 @@ interface OSE {
   total_value: number;
   created_by: string;
   created_at: string;
-  team_id: string | null;
-  date: string | null;
-  team?: Team;
+  teams?: Team[];
+  dates?: string[];
 }
 
 interface OSEItem {
@@ -59,6 +58,15 @@ interface OSEItem {
   service?: ServiceCatalog;
 }
 
+interface AnalyticItem {
+  up: string;
+  description: string;
+  unit: string;
+  totalQuantity: number;
+  unitPrice: number;
+  totalValue: number;
+}
+
 export default function Budget() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -69,12 +77,15 @@ export default function Budget() {
   const [selectedOse, setSelectedOse] = useState<OSE | null>(null);
   const [oseFilter, setOseFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [teamFilter, setTeamFilter] = useState<string>("all");
+  const [dateFromFilter, setDateFromFilter] = useState<Date | undefined>(undefined);
+  const [dateToFilter, setDateToFilter] = useState<Date | undefined>(undefined);
   
   // New OSE form
   const [newOseNumber, setNewOseNumber] = useState("");
   const [newOseDescription, setNewOseDescription] = useState("");
-  const [newOseTeamId, setNewOseTeamId] = useState<string | null>(null);
-  const [newOseDate, setNewOseDate] = useState<Date | undefined>(undefined);
+  const [newOseTeams, setNewOseTeams] = useState<Team[]>([]);
+  const [newOseDates, setNewOseDates] = useState<Date[]>([]);
   const [teamSearchOpen, setTeamSearchOpen] = useState(false);
   const [datePopoverOpen, setDatePopoverOpen] = useState(false);
   
@@ -113,19 +124,40 @@ export default function Budget() {
     },
   });
 
-  // Fetch OSEs
+  // Fetch OSEs with teams and dates
   const { data: oses = [] } = useQuery({
     queryKey: ["oses"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: osesData, error } = await supabase
         .from("oses")
-        .select("*, teams:team_id(id, name)")
+        .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data || []).map((ose: any) => ({
-        ...ose,
-        team: ose.teams
-      })) as OSE[];
+
+      // Fetch teams and dates for each OSE
+      const osesWithRelations = await Promise.all(
+        (osesData || []).map(async (ose) => {
+          const [teamsRes, datesRes] = await Promise.all([
+            supabase
+              .from("ose_teams")
+              .select("team_id, teams:team_id(id, name)")
+              .eq("ose_id", ose.id),
+            supabase
+              .from("ose_dates")
+              .select("date")
+              .eq("ose_id", ose.id)
+              .order("date"),
+          ]);
+
+          return {
+            ...ose,
+            teams: (teamsRes.data || []).map((t: any) => t.teams).filter(Boolean),
+            dates: (datesRes.data || []).map((d: any) => d.date),
+          } as OSE;
+        })
+      );
+
+      return osesWithRelations;
     },
   });
 
@@ -141,7 +173,6 @@ export default function Budget() {
         .order("created_at");
       if (error) throw error;
       
-      // Fetch service details for each item
       const itemsWithServices = await Promise.all(
         data.map(async (item: OSEItem) => {
           const { data: service } = await supabase
@@ -155,6 +186,45 @@ export default function Budget() {
       return itemsWithServices;
     },
     enabled: !!selectedOse,
+  });
+
+  // Fetch all items for analytics
+  const { data: allOseItems = [] } = useQuery({
+    queryKey: ["all-ose-items", teamFilter, dateFromFilter, dateToFilter],
+    queryFn: async () => {
+      // Get filtered OSE IDs
+      let filteredOseIds = oses.map(ose => ose.id);
+
+      if (teamFilter !== "all") {
+        filteredOseIds = oses
+          .filter(ose => ose.teams?.some(t => t.id === teamFilter))
+          .map(ose => ose.id);
+      }
+
+      if (dateFromFilter || dateToFilter) {
+        filteredOseIds = filteredOseIds.filter(oseId => {
+          const ose = oses.find(o => o.id === oseId);
+          if (!ose?.dates?.length) return false;
+          return ose.dates.some(date => {
+            const d = new Date(date);
+            if (dateFromFilter && d < dateFromFilter) return false;
+            if (dateToFilter && d > dateToFilter) return false;
+            return true;
+          });
+        });
+      }
+
+      if (filteredOseIds.length === 0) return [];
+
+      const { data, error } = await supabase
+        .from("ose_items")
+        .select("*, service:service_id(*)")
+        .in("ose_id", filteredOseIds);
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: activeTab === "analitico",
   });
 
   // Filtered services for search
@@ -173,9 +243,61 @@ export default function Budget() {
       const matchesSearch = ose.ose_number.toLowerCase().includes(oseFilter.toLowerCase()) ||
         (ose.description?.toLowerCase().includes(oseFilter.toLowerCase()) ?? false);
       const matchesStatus = statusFilter === "all" || ose.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesTeam = teamFilter === "all" || ose.teams?.some(t => t.id === teamFilter);
+      
+      let matchesDate = true;
+      if (dateFromFilter || dateToFilter) {
+        if (!ose.dates?.length) {
+          matchesDate = false;
+        } else {
+          matchesDate = ose.dates.some(date => {
+            const d = new Date(date);
+            if (dateFromFilter && d < dateFromFilter) return false;
+            if (dateToFilter && d > dateToFilter) return false;
+            return true;
+          });
+        }
+      }
+      
+      return matchesSearch && matchesStatus && matchesTeam && matchesDate;
     });
-  }, [oses, oseFilter, statusFilter]);
+  }, [oses, oseFilter, statusFilter, teamFilter, dateFromFilter, dateToFilter]);
+
+  // Analytics data
+  const analyticsData = useMemo((): AnalyticItem[] => {
+    const grouped: Record<string, AnalyticItem> = {};
+
+    allOseItems.forEach((item: any) => {
+      const service = item.service;
+      if (!service) return;
+
+      if (!grouped[service.up]) {
+        grouped[service.up] = {
+          up: service.up,
+          description: service.description,
+          unit: service.unit,
+          totalQuantity: 0,
+          unitPrice: service.gross_price,
+          totalValue: 0,
+        };
+      }
+
+      grouped[service.up].totalQuantity += item.quantity;
+      grouped[service.up].totalValue += item.total_price;
+    });
+
+    return Object.values(grouped).sort((a, b) => b.totalValue - a.totalValue);
+  }, [allOseItems]);
+
+  const analyticsTotals = useMemo(() => {
+    return analyticsData.reduce(
+      (acc, item) => ({
+        quantity: acc.quantity + item.totalQuantity,
+        value: acc.value + item.totalValue,
+      }),
+      { quantity: 0, value: 0 }
+    );
+  }, [analyticsData]);
 
   // Create OSE mutation
   const createOse = useMutation({
@@ -194,8 +316,6 @@ export default function Budget() {
           description: newOseDescription || null,
           created_by: user.id,
           total_value: totalValue,
-          team_id: newOseTeamId,
-          date: newOseDate ? format(newOseDate, "yyyy-MM-dd") : null,
         })
         .select()
         .single();
@@ -214,6 +334,26 @@ export default function Budget() {
       const { error: itemsError } = await supabase.from("ose_items").insert(items);
       if (itemsError) throw itemsError;
 
+      // Create team associations
+      if (newOseTeams.length > 0) {
+        const teamInserts = newOseTeams.map(team => ({
+          ose_id: ose.id,
+          team_id: team.id,
+        }));
+        const { error: teamsError } = await supabase.from("ose_teams").insert(teamInserts);
+        if (teamsError) throw teamsError;
+      }
+
+      // Create date associations
+      if (newOseDates.length > 0) {
+        const dateInserts = newOseDates.map(date => ({
+          ose_id: ose.id,
+          date: format(date, "yyyy-MM-dd"),
+        }));
+        const { error: datesError } = await supabase.from("ose_dates").insert(dateInserts);
+        if (datesError) throw datesError;
+      }
+
       return ose;
     },
     onSuccess: () => {
@@ -221,8 +361,8 @@ export default function Budget() {
       setIsNewOseDialogOpen(false);
       setNewOseNumber("");
       setNewOseDescription("");
-      setNewOseTeamId(null);
-      setNewOseDate(undefined);
+      setNewOseTeams([]);
+      setNewOseDates([]);
       setCart([]);
       toast({ title: "OSE criada com sucesso!" });
     },
@@ -248,7 +388,6 @@ export default function Budget() {
 
       if (itemError) throw itemError;
 
-      // Update OSE total
       const { error: oseError } = await supabase
         .from("oses")
         .update({ total_value: selectedOse.total_value + totalPrice })
@@ -276,7 +415,6 @@ export default function Budget() {
       const { error } = await supabase.from("ose_items").delete().eq("id", item.id);
       if (error) throw error;
 
-      // Update OSE total
       if (selectedOse) {
         await supabase
           .from("oses")
@@ -303,10 +441,39 @@ export default function Budget() {
     setCart(cart.filter((_, i) => i !== index));
   };
 
+  const addTeamToOse = (team: Team) => {
+    if (!newOseTeams.find(t => t.id === team.id)) {
+      setNewOseTeams([...newOseTeams, team]);
+    }
+    setTeamSearchOpen(false);
+  };
+
+  const removeTeamFromOse = (teamId: string) => {
+    setNewOseTeams(newOseTeams.filter(t => t.id !== teamId));
+  };
+
+  const addDateToOse = (date: Date | undefined) => {
+    if (date && !newOseDates.find(d => format(d, "yyyy-MM-dd") === format(date, "yyyy-MM-dd"))) {
+      setNewOseDates([...newOseDates, date]);
+    }
+  };
+
+  const removeDateFromOse = (index: number) => {
+    setNewOseDates(newOseDates.filter((_, i) => i !== index));
+  };
+
   const cartTotal = cart.reduce((sum, item) => sum + item.service.gross_price * item.quantity, 0);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  };
+
+  const clearFilters = () => {
+    setOseFilter("");
+    setStatusFilter("all");
+    setTeamFilter("all");
+    setDateFromFilter(undefined);
+    setDateToFilter(undefined);
   };
 
   return (
@@ -351,82 +518,85 @@ export default function Budget() {
                   </div>
                 </div>
 
-                {/* Team and Date */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Equipe</Label>
-                    <Popover open={teamSearchOpen} onOpenChange={setTeamSearchOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          className="w-full justify-between"
-                        >
-                          {newOseTeamId
-                            ? teams.find((t) => t.id === newOseTeamId)?.name
-                            : "Selecione uma equipe..."}
-                          <Users className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[300px] p-0">
-                        <Command>
-                          <CommandInput placeholder="Pesquisar equipe..." />
-                          <CommandList>
-                            <CommandEmpty>Nenhuma equipe encontrada.</CommandEmpty>
-                            <CommandGroup>
-                              {teams.map((team) => (
+                {/* Teams (Multiple) */}
+                <div className="space-y-2">
+                  <Label>Equipes</Label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {newOseTeams.map((team) => (
+                      <Badge key={team.id} variant="secondary" className="flex items-center gap-1">
+                        {team.name}
+                        <X
+                          className="h-3 w-3 cursor-pointer"
+                          onClick={() => removeTeamFromOse(team.id)}
+                        />
+                      </Badge>
+                    ))}
+                  </div>
+                  <Popover open={teamSearchOpen} onOpenChange={setTeamSearchOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-between">
+                        Adicionar equipe...
+                        <Users className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0">
+                      <Command>
+                        <CommandInput placeholder="Pesquisar equipe..." />
+                        <CommandList>
+                          <CommandEmpty>Nenhuma equipe encontrada.</CommandEmpty>
+                          <CommandGroup>
+                            {teams
+                              .filter(t => !newOseTeams.find(nt => nt.id === t.id))
+                              .map((team) => (
                                 <CommandItem
                                   key={team.id}
                                   value={team.name}
-                                  onSelect={() => {
-                                    setNewOseTeamId(team.id);
-                                    setTeamSearchOpen(false);
-                                  }}
+                                  onSelect={() => addTeamToOse(team)}
                                 >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      newOseTeamId === team.id ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
                                   {team.name}
                                 </CommandItem>
                               ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Data</Label>
-                    <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !newOseDate && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {newOseDate ? format(newOseDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecione uma data"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={newOseDate}
-                          onSelect={(date) => {
-                            setNewOseDate(date);
-                            setDatePopoverOpen(false);
-                          }}
-                          locale={ptBR}
-                          initialFocus
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Dates (Multiple) */}
+                <div className="space-y-2">
+                  <Label>Datas</Label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {newOseDates.map((date, index) => (
+                      <Badge key={index} variant="secondary" className="flex items-center gap-1">
+                        {format(date, "dd/MM/yyyy", { locale: ptBR })}
+                        <X
+                          className="h-3 w-3 cursor-pointer"
+                          onClick={() => removeDateFromOse(index)}
                         />
-                      </PopoverContent>
-                    </Popover>
+                      </Badge>
+                    ))}
                   </div>
+                  <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        Adicionar data...
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={undefined}
+                        onSelect={(date) => {
+                          addDateToOse(date);
+                          setDatePopoverOpen(false);
+                        }}
+                        locale={ptBR}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
                 {/* Add Service */}
@@ -592,6 +762,10 @@ export default function Budget() {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="oses">OSEs</TabsTrigger>
+            <TabsTrigger value="analitico">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Analítico
+            </TabsTrigger>
             <TabsTrigger value="catalog">Catálogo de Serviços</TabsTrigger>
           </TabsList>
 
@@ -599,8 +773,8 @@ export default function Budget() {
             {/* Filters */}
             <Card>
               <CardContent className="pt-4">
-                <div className="flex gap-4">
-                  <div className="flex-1">
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex-1 min-w-[200px]">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -612,7 +786,7 @@ export default function Budget() {
                     </div>
                   </div>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-[150px]">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -622,6 +796,59 @@ export default function Budget() {
                       <SelectItem value="finalizada">Finalizada</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Select value={teamFilter} onValueChange={setTeamFilter}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Equipe" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Equipes</SelectItem>
+                      {teams.map((team) => (
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={cn("w-[130px]", dateFromFilter && "text-foreground")}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateFromFilter ? format(dateFromFilter, "dd/MM/yy") : "De"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={dateFromFilter}
+                        onSelect={setDateFromFilter}
+                        locale={ptBR}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={cn("w-[130px]", dateToFilter && "text-foreground")}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateToFilter ? format(dateToFilter, "dd/MM/yy") : "Até"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={dateToFilter}
+                        onSelect={setDateToFilter}
+                        locale={ptBR}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  {(oseFilter || statusFilter !== "all" || teamFilter !== "all" || dateFromFilter || dateToFilter) && (
+                    <Button variant="ghost" size="sm" onClick={clearFilters}>
+                      <X className="h-4 w-4 mr-1" />
+                      Limpar
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -661,16 +888,27 @@ export default function Budget() {
                     )}
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    {ose.team && (
-                      <div className="flex items-center gap-2 text-sm">
+                    {ose.teams && ose.teams.length > 0 && (
+                      <div className="flex items-center gap-2 text-sm flex-wrap">
                         <Users className="h-4 w-4 text-muted-foreground" />
-                        <span>{ose.team.name}</span>
+                        {ose.teams.map((team, i) => (
+                          <Badge key={team.id} variant="outline" className="text-xs">
+                            {team.name}
+                          </Badge>
+                        ))}
                       </div>
                     )}
-                    {ose.date && (
-                      <div className="flex items-center gap-2 text-sm">
+                    {ose.dates && ose.dates.length > 0 && (
+                      <div className="flex items-center gap-2 text-sm flex-wrap">
                         <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                        <span>{format(new Date(ose.date), "dd/MM/yyyy", { locale: ptBR })}</span>
+                        {ose.dates.slice(0, 3).map((date, i) => (
+                          <Badge key={i} variant="outline" className="text-xs">
+                            {format(new Date(date), "dd/MM", { locale: ptBR })}
+                          </Badge>
+                        ))}
+                        {ose.dates.length > 3 && (
+                          <span className="text-xs text-muted-foreground">+{ose.dates.length - 3}</span>
+                        )}
                       </div>
                     )}
                     <div className="flex justify-between items-center pt-2">
@@ -833,7 +1071,10 @@ export default function Budget() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => removeItem.mutate(item)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeItem.mutate(item);
+                              }}
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
@@ -842,70 +1083,206 @@ export default function Budget() {
                       ))}
                     </TableBody>
                   </Table>
-                  {oseItems.length > 0 && (
-                    <div className="flex justify-end mt-4 pt-4 border-t">
-                      <div className="text-right">
-                        <span className="text-muted-foreground">Total da OSE:</span>
-                        <span className="ml-4 text-2xl font-bold text-primary">
-                          {formatCurrency(selectedOse.total_value)}
-                        </span>
-                      </div>
+                  <div className="flex justify-end mt-4 pt-4 border-t">
+                    <div className="text-right">
+                      <span className="text-muted-foreground">Total da OSE:</span>
+                      <span className="ml-2 text-2xl font-bold text-primary">
+                        {formatCurrency(selectedOse.total_value)}
+                      </span>
                     </div>
-                  )}
+                  </div>
                 </CardContent>
               </Card>
             )}
           </TabsContent>
 
-          <TabsContent value="catalog" className="space-y-4">
+          {/* Analytics Tab */}
+          <TabsContent value="analitico" className="space-y-4">
+            {/* Filters for Analytics */}
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex flex-wrap gap-4">
+                  <Select value={teamFilter} onValueChange={setTeamFilter}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Equipe" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Equipes</SelectItem>
+                      {teams.map((team) => (
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={cn("w-[150px]", dateFromFilter && "text-foreground")}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateFromFilter ? format(dateFromFilter, "dd/MM/yyyy") : "Data inicial"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={dateFromFilter}
+                        onSelect={setDateFromFilter}
+                        locale={ptBR}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={cn("w-[150px]", dateToFilter && "text-foreground")}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateToFilter ? format(dateToFilter, "dd/MM/yyyy") : "Data final"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={dateToFilter}
+                        onSelect={setDateToFilter}
+                        locale={ptBR}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  {(teamFilter !== "all" || dateFromFilter || dateToFilter) && (
+                    <Button variant="ghost" size="sm" onClick={clearFilters}>
+                      <X className="h-4 w-4 mr-1" />
+                      Limpar
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Summary Cards */}
+            <div className="grid gap-4 md:grid-cols-3">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription>Total de Serviços</CardDescription>
+                  <CardTitle className="text-3xl">{analyticsData.length}</CardTitle>
+                </CardHeader>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription>Quantidade Total</CardDescription>
+                  <CardTitle className="text-3xl">{analyticsTotals.quantity.toLocaleString("pt-BR")}</CardTitle>
+                </CardHeader>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription>Valor Total</CardDescription>
+                  <CardTitle className="text-3xl text-primary">{formatCurrency(analyticsTotals.value)}</CardTitle>
+                </CardHeader>
+              </Card>
+            </div>
+
+            {/* Analytics Table */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Catálogo de Serviços
-                </CardTitle>
+                <CardTitle>Serviços Agrupados por UP</CardTitle>
                 <CardDescription>
-                  {services.length} serviços cadastrados
+                  Quantidade e valor somados de todas as OSEs filtradas
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="relative mb-4">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Pesquisar por UP ou descrição..."
-                    value={upSearch}
-                    onChange={(e) => setUpSearch(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-                <div className="rounded-md border max-h-[500px] overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>UP</TableHead>
-                        <TableHead>Nº Serviço</TableHead>
-                        <TableHead>Descrição</TableHead>
-                        <TableHead>Unidade</TableHead>
-                        <TableHead className="text-right">Preço Bruto</TableHead>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>UP</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Unidade</TableHead>
+                      <TableHead className="text-right">Qtd Total</TableHead>
+                      <TableHead className="text-right">Preço Unit.</TableHead>
+                      <TableHead className="text-right">Valor Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {analyticsData.map((item) => (
+                      <TableRow key={item.up}>
+                        <TableCell className="font-medium">{item.up}</TableCell>
+                        <TableCell className="max-w-[300px] truncate">
+                          {item.description}
+                        </TableCell>
+                        <TableCell>{item.unit}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {item.totalQuantity.toLocaleString("pt-BR")}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(item.unitPrice)}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-primary">
+                          {formatCurrency(item.totalValue)}
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredServices.map((service) => (
-                        <TableRow key={service.id}>
-                          <TableCell className="font-medium">{service.up}</TableCell>
-                          <TableCell>{service.service_number}</TableCell>
-                          <TableCell className="max-w-[300px] truncate">
-                            {service.description}
-                          </TableCell>
-                          <TableCell>{service.unit}</TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatCurrency(service.gross_price)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                    ))}
+                  </TableBody>
+                </Table>
+                {analyticsData.length > 0 && (
+                  <div className="flex justify-end mt-4 pt-4 border-t">
+                    <div className="text-right">
+                      <span className="text-muted-foreground">Total Geral:</span>
+                      <span className="ml-2 text-2xl font-bold text-primary">
+                        {formatCurrency(analyticsTotals.value)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {analyticsData.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Nenhum dado encontrado para os filtros selecionados.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="catalog" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Catálogo de Serviços</CardTitle>
+                <CardDescription>Lista de todos os serviços disponíveis</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Pesquisar por UP ou descrição..."
+                      value={upSearch}
+                      onChange={(e) => setUpSearch(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
                 </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>UP</TableHead>
+                      <TableHead>Nº Serviço</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Unidade</TableHead>
+                      <TableHead className="text-right">Preço Bruto</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredServices.map((service) => (
+                      <TableRow key={service.id}>
+                        <TableCell className="font-medium">{service.up}</TableCell>
+                        <TableCell>{service.service_number}</TableCell>
+                        <TableCell className="max-w-[400px]">{service.description}</TableCell>
+                        <TableCell>{service.unit}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatCurrency(service.gross_price)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>
