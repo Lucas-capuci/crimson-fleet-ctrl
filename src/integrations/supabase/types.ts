@@ -306,34 +306,48 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
+          date: string | null
           description: string | null
           id: string
           ose_number: string
           status: string
+          team_id: string | null
           total_value: number
           updated_at: string
         }
         Insert: {
           created_at?: string
           created_by: string
+          date?: string | null
           description?: string | null
           id?: string
           ose_number: string
           status?: string
+          team_id?: string | null
           total_value?: number
           updated_at?: string
         }
         Update: {
           created_at?: string
           created_by?: string
+          date?: string | null
           description?: string | null
           id?: string
           ose_number?: string
           status?: string
+          team_id?: string | null
           total_value?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "oses_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       permission_profiles: {
         Row: {

@@ -15,10 +15,16 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Search, Trash2, Save, FileText, Check, ChevronsUpDown, Package } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Plus, Search, Trash2, Save, FileText, Check, ChevronsUpDown, Package, CalendarIcon, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+interface Team {
+  id: string;
+  name: string;
+}
 
 interface ServiceCatalog {
   id: string;
@@ -37,6 +43,9 @@ interface OSE {
   total_value: number;
   created_by: string;
   created_at: string;
+  team_id: string | null;
+  date: string | null;
+  team?: Team;
 }
 
 interface OSEItem {
@@ -64,6 +73,10 @@ export default function Budget() {
   // New OSE form
   const [newOseNumber, setNewOseNumber] = useState("");
   const [newOseDescription, setNewOseDescription] = useState("");
+  const [newOseTeamId, setNewOseTeamId] = useState<string | null>(null);
+  const [newOseDate, setNewOseDate] = useState<Date | undefined>(undefined);
+  const [teamSearchOpen, setTeamSearchOpen] = useState(false);
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
   
   // Add service form
   const [serviceSearchOpen, setServiceSearchOpen] = useState(false);
@@ -87,16 +100,32 @@ export default function Budget() {
     },
   });
 
+  // Fetch teams
+  const { data: teams = [] } = useQuery({
+    queryKey: ["teams"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("teams")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data as Team[];
+    },
+  });
+
   // Fetch OSEs
   const { data: oses = [] } = useQuery({
     queryKey: ["oses"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("oses")
-        .select("*")
+        .select("*, teams:team_id(id, name)")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as OSE[];
+      return (data || []).map((ose: any) => ({
+        ...ose,
+        team: ose.teams
+      })) as OSE[];
     },
   });
 
@@ -165,6 +194,8 @@ export default function Budget() {
           description: newOseDescription || null,
           created_by: user.id,
           total_value: totalValue,
+          team_id: newOseTeamId,
+          date: newOseDate ? format(newOseDate, "yyyy-MM-dd") : null,
         })
         .select()
         .single();
@@ -190,6 +221,8 @@ export default function Budget() {
       setIsNewOseDialogOpen(false);
       setNewOseNumber("");
       setNewOseDescription("");
+      setNewOseTeamId(null);
+      setNewOseDate(undefined);
       setCart([]);
       toast({ title: "OSE criada com sucesso!" });
     },
@@ -315,6 +348,84 @@ export default function Budget() {
                       onChange={(e) => setNewOseDescription(e.target.value)}
                       placeholder="Descrição da OSE"
                     />
+                  </div>
+                </div>
+
+                {/* Team and Date */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Equipe</Label>
+                    <Popover open={teamSearchOpen} onOpenChange={setTeamSearchOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                        >
+                          {newOseTeamId
+                            ? teams.find((t) => t.id === newOseTeamId)?.name
+                            : "Selecione uma equipe..."}
+                          <Users className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0">
+                        <Command>
+                          <CommandInput placeholder="Pesquisar equipe..." />
+                          <CommandList>
+                            <CommandEmpty>Nenhuma equipe encontrada.</CommandEmpty>
+                            <CommandGroup>
+                              {teams.map((team) => (
+                                <CommandItem
+                                  key={team.id}
+                                  value={team.name}
+                                  onSelect={() => {
+                                    setNewOseTeamId(team.id);
+                                    setTeamSearchOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      newOseTeamId === team.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {team.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Data</Label>
+                    <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !newOseDate && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {newOseDate ? format(newOseDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecione uma data"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={newOseDate}
+                          onSelect={(date) => {
+                            setNewOseDate(date);
+                            setDatePopoverOpen(false);
+                          }}
+                          locale={ptBR}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </div>
 
@@ -549,10 +660,22 @@ export default function Budget() {
                       <CardDescription>{ose.description}</CardDescription>
                     )}
                   </CardHeader>
-                  <CardContent>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">
-                        {format(new Date(ose.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                  <CardContent className="space-y-2">
+                    {ose.team && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <span>{ose.team.name}</span>
+                      </div>
+                    )}
+                    {ose.date && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                        <span>{format(new Date(ose.date), "dd/MM/yyyy", { locale: ptBR })}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="text-xs text-muted-foreground">
+                        Criada em {format(new Date(ose.created_at), "dd/MM/yyyy", { locale: ptBR })}
                       </span>
                       <span className="font-bold text-primary">
                         {formatCurrency(ose.total_value)}
