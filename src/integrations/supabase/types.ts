@@ -257,6 +257,35 @@ export type Database = {
           },
         ]
       }
+      ose_dates: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          ose_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          ose_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          ose_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ose_dates_ose_id_fkey"
+            columns: ["ose_id"]
+            isOneToOne: false
+            referencedRelation: "oses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ose_items: {
         Row: {
           created_at: string
@@ -298,6 +327,42 @@ export type Database = {
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "service_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ose_teams: {
+        Row: {
+          created_at: string
+          id: string
+          ose_id: string
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ose_id: string
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ose_id?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ose_teams_ose_id_fkey"
+            columns: ["ose_id"]
+            isOneToOne: false
+            referencedRelation: "oses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ose_teams_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
