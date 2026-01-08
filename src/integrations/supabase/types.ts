@@ -294,6 +294,7 @@ export type Database = {
           quantity: number
           service_id: string
           total_price: number
+          trip_id: string | null
           unit_price: number
         }
         Insert: {
@@ -303,6 +304,7 @@ export type Database = {
           quantity?: number
           service_id: string
           total_price: number
+          trip_id?: string | null
           unit_price: number
         }
         Update: {
@@ -312,6 +314,7 @@ export type Database = {
           quantity?: number
           service_id?: string
           total_price?: number
+          trip_id?: string | null
           unit_price?: number
         }
         Relationships: [
@@ -327,6 +330,13 @@ export type Database = {
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "service_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ose_items_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "ose_trips"
             referencedColumns: ["id"]
           },
         ]
@@ -360,6 +370,45 @@ export type Database = {
           },
           {
             foreignKeyName: "ose_teams_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ose_trips: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          ose_id: string
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          ose_id: string
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          ose_id?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ose_trips_ose_id_fkey"
+            columns: ["ose_id"]
+            isOneToOne: false
+            referencedRelation: "oses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ose_trips_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
