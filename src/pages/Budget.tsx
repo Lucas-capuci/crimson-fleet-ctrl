@@ -17,7 +17,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { Calendar } from "@/components/ui/calendar";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Plus, Search, Trash2, Save, Check, ChevronsUpDown, CalendarIcon, Users, BarChart3, X, MapPin } from "lucide-react";
+import { Plus, Search, Trash2, Save, Check, ChevronsUpDown, CalendarIcon, Users, BarChart3, X, MapPin, Pencil, Upload } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -121,6 +123,16 @@ export default function Budget() {
   const [selectedService, setSelectedService] = useState<ServiceCatalog | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
   const [upSearch, setUpSearch] = useState("");
+  
+  // Edit OSE
+  const [isEditOseDialogOpen, setIsEditOseDialogOpen] = useState(false);
+  const [editOseNumber, setEditOseNumber] = useState("");
+  const [editOseDescription, setEditOseDescription] = useState("");
+  const [editOseStatus, setEditOseStatus] = useState("");
+  
+  // Import catalog
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importData, setImportData] = useState("");
 
   // Fetch services catalog
   const { data: services = [] } = useQuery({
@@ -452,6 +464,7 @@ export default function Budget() {
 
       const tripTotal = (trip.items || []).reduce((sum, item) => sum + item.total_price, 0);
 
+      await supabase.from("ose_items").delete().eq("trip_id", tripId);
       await supabase.from("ose_trips").delete().eq("id", tripId);
       
       await supabase
@@ -465,6 +478,106 @@ export default function Budget() {
       toast({ title: "Ida removida!" });
     },
   });
+
+  // Delete OSE
+  const deleteOse = useMutation({
+    mutationFn: async (oseId: string) => {
+      // Delete items first
+      await supabase.from("ose_items").delete().eq("ose_id", oseId);
+      // Delete trips
+      await supabase.from("ose_trips").delete().eq("ose_id", oseId);
+      // Delete OSE
+      const { error } = await supabase.from("oses").delete().eq("id", oseId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["oses"] });
+      setSelectedOse(null);
+      toast({ title: "OSE excluída com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao excluir OSE", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Update OSE
+  const updateOse = useMutation({
+    mutationFn: async () => {
+      if (!selectedOse) throw new Error("Nenhuma OSE selecionada");
+      
+      const { error } = await supabase
+        .from("oses")
+        .update({
+          ose_number: editOseNumber,
+          description: editOseDescription || null,
+          status: editOseStatus,
+        })
+        .eq("id", selectedOse.id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["oses"] });
+      setIsEditOseDialogOpen(false);
+      toast({ title: "OSE atualizada com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atualizar OSE", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Import services catalog
+  const importCatalog = useMutation({
+    mutationFn: async () => {
+      if (!importData.trim()) throw new Error("Dados vazios");
+      
+      const lines = importData.trim().split("\n");
+      const services: { up: string; service_number: string; description: string; unit: string; gross_price: number }[] = [];
+      
+      for (const line of lines) {
+        // Expected format: UP;Número;Descrição;Unidade;Preço
+        const parts = line.split(";").map(p => p.trim());
+        if (parts.length >= 5) {
+          const price = parseFloat(parts[4].replace(",", ".").replace(/[^\d.]/g, ""));
+          if (!isNaN(price)) {
+            services.push({
+              up: parts[0],
+              service_number: parts[1],
+              description: parts[2],
+              unit: parts[3],
+              gross_price: price,
+            });
+          }
+        }
+      }
+      
+      if (services.length === 0) throw new Error("Nenhum serviço válido encontrado");
+      
+      const { error } = await supabase.from("service_catalog").insert(services);
+      if (error) throw error;
+      
+      return services.length;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ["service-catalog"] });
+      setIsImportDialogOpen(false);
+      setImportData("");
+      toast({ title: `${count} serviços importados com sucesso!` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao importar", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Open edit dialog
+  const openEditDialog = () => {
+    if (selectedOse) {
+      setEditOseNumber(selectedOse.ose_number);
+      setEditOseDescription(selectedOse.description || "");
+      setEditOseStatus(selectedOse.status);
+      setIsEditOseDialogOpen(true);
+    }
+  };
 
   // Helper functions
   const resetNewOseForm = () => {
@@ -984,13 +1097,91 @@ export default function Budget() {
                       <CardTitle>{selectedOse.ose_number}</CardTitle>
                       <CardDescription>{selectedOse.description}</CardDescription>
                     </div>
-                    <Dialog open={isAddTripDialogOpen} onOpenChange={setIsAddTripDialogOpen}>
-                      <DialogTrigger asChild>
-                        <Button>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Nova Ida
-                        </Button>
-                      </DialogTrigger>
+                    <div className="flex gap-2">
+                      {/* Edit OSE Dialog */}
+                      <Dialog open={isEditOseDialogOpen} onOpenChange={setIsEditOseDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="icon" onClick={openEditDialog}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Editar OSE</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label>Número da OSE</Label>
+                              <Input
+                                value={editOseNumber}
+                                onChange={(e) => setEditOseNumber(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Descrição</Label>
+                              <Input
+                                value={editOseDescription}
+                                onChange={(e) => setEditOseDescription(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Status</Label>
+                              <Select value={editOseStatus} onValueChange={setEditOseStatus}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="aberta">Aberta</SelectItem>
+                                  <SelectItem value="em_andamento">Em Andamento</SelectItem>
+                                  <SelectItem value="finalizada">Finalizada</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <Button variant="outline" onClick={() => setIsEditOseDialogOpen(false)}>
+                                Cancelar
+                              </Button>
+                              <Button onClick={() => updateOse.mutate()} disabled={updateOse.isPending}>
+                                Salvar
+                              </Button>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+
+                      {/* Delete OSE */}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="icon">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Excluir OSE?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Esta ação não pode ser desfeita. Todas as idas e itens serão excluídos permanentemente.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deleteOse.mutate(selectedOse.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+
+                      <Dialog open={isAddTripDialogOpen} onOpenChange={setIsAddTripDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Nova Ida
+                          </Button>
+                        </DialogTrigger>
                       <DialogContent className="max-w-2xl">
                         <DialogHeader>
                           <DialogTitle>Adicionar Ida à {selectedOse.ose_number}</DialogTitle>
@@ -1140,6 +1331,7 @@ export default function Budget() {
                         </div>
                       </DialogContent>
                     </Dialog>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -1352,8 +1544,59 @@ export default function Budget() {
           <TabsContent value="catalog" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Catálogo de Serviços</CardTitle>
-                <CardDescription>Lista de todos os serviços disponíveis</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Catálogo de Serviços</CardTitle>
+                    <CardDescription>Lista de todos os serviços disponíveis ({services.length} serviços)</CardDescription>
+                  </div>
+                  <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Importar Catálogo
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-3xl">
+                      <DialogHeader>
+                        <DialogTitle>Importar Catálogo de Serviços</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>Cole os dados do catálogo (separados por ponto e vírgula)</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Formato: UP;Número do Serviço;Descrição;Unidade;Preço
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Exemplo: UP001;12345;Instalação de poste;UN;150,00
+                          </p>
+                          <Textarea
+                            value={importData}
+                            onChange={(e) => setImportData(e.target.value)}
+                            placeholder="Cole os dados aqui, um serviço por linha..."
+                            rows={15}
+                            className="font-mono text-sm"
+                          />
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">
+                            {importData.split("\n").filter(l => l.trim()).length} linhas
+                          </span>
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+                              Cancelar
+                            </Button>
+                            <Button 
+                              onClick={() => importCatalog.mutate()} 
+                              disabled={importCatalog.isPending || !importData.trim()}
+                            >
+                              {importCatalog.isPending ? "Importando..." : "Importar"}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="mb-4">
