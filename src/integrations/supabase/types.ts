@@ -902,6 +902,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_ose: {
+        Args: { _ose_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_access_team: {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
@@ -917,6 +921,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_ose_owner: {
+        Args: { _ose_id: string; _user_id: string }
         Returns: boolean
       }
       user_has_permission: {
