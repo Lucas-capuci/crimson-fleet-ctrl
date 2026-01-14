@@ -52,7 +52,7 @@ interface DepartureFormData {
 }
 
 const Departures = () => {
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, userTeamIds } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -74,18 +74,20 @@ const Departures = () => {
     no_departure_reason: "",
   });
 
-  // Fetch teams for supervisor wizard (only those with show_in_departures = true)
+  // Fetch teams for supervisor wizard (only those assigned to this supervisor)
   const { data: allTeams = [] } = useQuery({
-    queryKey: ["supervisor_teams_departures"],
+    queryKey: ["supervisor_teams_departures", userTeamIds],
     queryFn: async () => {
+      if (userTeamIds.length === 0) return [];
       const { data, error } = await supabase
         .from("teams")
         .select("id, name, type, show_in_departures, vehicles(plate, model)")
+        .in("id", userTeamIds)
         .order("name");
       if (error) throw error;
       return data as Team[];
     },
-    enabled: !isAdmin,
+    enabled: !isAdmin && userTeamIds.length > 0,
   });
 
   // Fetch team schedules for the selected date
