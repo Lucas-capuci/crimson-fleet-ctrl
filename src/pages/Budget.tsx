@@ -330,7 +330,7 @@ export default function Budget() {
           .insert({
             ose_id: ose.id,
             team_id: trip.team.id,
-            date: format(trip.date, "yyyy-MM-dd"),
+            date: `${trip.date.getFullYear()}-${String(trip.date.getMonth() + 1).padStart(2, '0')}-${String(trip.date.getDate()).padStart(2, '0')}`,
           })
           .select()
           .single();
@@ -382,7 +382,7 @@ export default function Budget() {
         .insert({
           ose_id: selectedOse.id,
           team_id: newTripTeam.id,
-          date: format(newTripDate, "yyyy-MM-dd"),
+          date: `${newTripDate.getFullYear()}-${String(newTripDate.getMonth() + 1).padStart(2, '0')}-${String(newTripDate.getDate()).padStart(2, '0')}`,
         })
         .select()
         .single();
