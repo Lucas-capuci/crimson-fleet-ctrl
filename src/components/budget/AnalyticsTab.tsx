@@ -12,6 +12,8 @@ import { CalendarIcon, X, TrendingUp, Users, Scissors, Target, FileText, DollarS
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
 
 interface Team {
   id: string;
@@ -482,50 +484,122 @@ export function AnalyticsTab({
                   Nenhum dado encontrado para os filtros selecionados.
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {teamAnalytics.map((team) => (
-                    <div key={team.teamId} className="border rounded-lg p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Badge variant="secondary" className="text-sm font-medium">
-                            {team.teamName}
-                          </Badge>
-                          <span className="text-sm text-muted-foreground">
-                            {team.totalTrips} ida{team.totalTrips !== 1 ? "s" : ""}
+                <div className="space-y-6">
+                  {/* Chart */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg">Produção por Equipe</CardTitle>
+                      <CardDescription>Valores em R$ por equipe</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={teamAnalytics.map((team) => ({
+                              name: team.teamName,
+                              value: team.totalValue,
+                              podas: team.podasCount,
+                              espacadores: team.espacadoresCount,
+                            }))}
+                            margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis 
+                              dataKey="name" 
+                              tick={{ fontSize: 11 }}
+                              angle={-45}
+                              textAnchor="end"
+                              height={80}
+                              interval={0}
+                              className="fill-muted-foreground"
+                            />
+                            <YAxis 
+                              tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+                              className="fill-muted-foreground"
+                              tick={{ fontSize: 11 }}
+                            />
+                            <ChartTooltip
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const data = payload[0].payload;
+                                  return (
+                                    <div className="bg-background border rounded-lg shadow-lg p-3">
+                                      <p className="font-semibold">{data.name}</p>
+                                      <p className="text-primary font-bold">{formatCurrency(data.value)}</p>
+                                      <div className="text-sm text-muted-foreground mt-1">
+                                        <p>Podas: {data.podas.toLocaleString("pt-BR")}</p>
+                                        <p>Espaçadores: {data.espacadores.toLocaleString("pt-BR")}</p>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Bar 
+                              dataKey="value" 
+                              radius={[4, 4, 0, 0]}
+                              className="fill-primary"
+                            >
+                              {teamAnalytics.map((_, index) => (
+                                <Cell 
+                                  key={`cell-${index}`} 
+                                  className="fill-primary hover:fill-primary/80 transition-colors"
+                                />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Team Details List */}
+                  <div className="space-y-3">
+                    {teamAnalytics.map((team) => (
+                      <div key={team.teamId} className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Badge variant="secondary" className="text-sm font-medium">
+                              {team.teamName}
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">
+                              {team.totalTrips} ida{team.totalTrips !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                          <span className="text-lg font-bold text-primary">
+                            {formatCurrency(team.totalValue)}
                           </span>
                         </div>
-                        <span className="text-lg font-bold text-primary">
-                          {formatCurrency(team.totalValue)}
+                        <Progress value={(team.totalValue / maxTeamValue) * 100} className="h-2" />
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Serviços:</span>{" "}
+                            <span className="font-medium">{team.totalServices}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Quantidade:</span>{" "}
+                            <span className="font-medium">{team.totalQuantity.toLocaleString("pt-BR")}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground text-green-600">Podas:</span>{" "}
+                            <span className="font-medium">{team.podasCount.toLocaleString("pt-BR")}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground text-blue-600">Espaçadores:</span>{" "}
+                            <span className="font-medium">{team.espacadoresCount.toLocaleString("pt-BR")}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    <div className="flex justify-end pt-4 border-t">
+                      <div className="text-right">
+                        <span className="text-muted-foreground">Total Geral:</span>
+                        <span className="ml-2 text-2xl font-bold text-primary">
+                          {formatCurrency(analyticsTotals.value)}
                         </span>
                       </div>
-                      <Progress value={(team.totalValue / maxTeamValue) * 100} className="h-2" />
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Serviços:</span>{" "}
-                          <span className="font-medium">{team.totalServices}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Quantidade:</span>{" "}
-                          <span className="font-medium">{team.totalQuantity.toLocaleString("pt-BR")}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground text-green-600">Podas:</span>{" "}
-                          <span className="font-medium">{team.podasCount.toLocaleString("pt-BR")}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground text-blue-600">Espaçadores:</span>{" "}
-                          <span className="font-medium">{team.espacadoresCount.toLocaleString("pt-BR")}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  <div className="flex justify-end pt-4 border-t">
-                    <div className="text-right">
-                      <span className="text-muted-foreground">Total Geral:</span>
-                      <span className="ml-2 text-2xl font-bold text-primary">
-                        {formatCurrency(analyticsTotals.value)}
-                      </span>
                     </div>
                   </div>
                 </div>
