@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { AnalyticsTab } from "@/components/budget/AnalyticsTab";
 
 interface Team {
   id: string;
@@ -94,7 +95,7 @@ export default function Budget() {
   const [isNewOseDialogOpen, setIsNewOseDialogOpen] = useState(false);
   const [isAddTripDialogOpen, setIsAddTripDialogOpen] = useState(false);
   const [selectedOse, setSelectedOse] = useState<OSE | null>(null);
-  const [selectedTrip, setSelectedTrip] = useState<OSETrip | null>(null);
+  
   const [oseFilter, setOseFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [teamFilter, setTeamFilter] = useState<string>("all");
@@ -295,41 +296,6 @@ export default function Budget() {
     });
   }, [oses, oseFilter, statusFilter, teamFilter, dateFromFilter, dateToFilter]);
 
-  // Analytics data
-  const analyticsData = useMemo((): AnalyticItem[] => {
-    const grouped: Record<string, AnalyticItem> = {};
-
-    allOseItems.forEach((item: any) => {
-      const service = item.service;
-      if (!service) return;
-
-      if (!grouped[service.up]) {
-        grouped[service.up] = {
-          up: service.up,
-          description: service.description,
-          unit: service.unit,
-          totalQuantity: 0,
-          unitPrice: service.gross_price,
-          totalValue: 0,
-        };
-      }
-
-      grouped[service.up].totalQuantity += item.quantity;
-      grouped[service.up].totalValue += item.total_price;
-    });
-
-    return Object.values(grouped).sort((a, b) => b.totalValue - a.totalValue);
-  }, [allOseItems]);
-
-  const analyticsTotals = useMemo(() => {
-    return analyticsData.reduce(
-      (acc, item) => ({
-        quantity: acc.quantity + item.totalQuantity,
-        value: acc.value + item.totalValue,
-      }),
-      { quantity: 0, value: 0 }
-    );
-  }, [analyticsData]);
 
   // Create OSE mutation
   const createOse = useMutation({
@@ -1407,138 +1373,18 @@ export default function Budget() {
 
           {/* Analytics Tab */}
           <TabsContent value="analitico" className="space-y-4">
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex flex-wrap gap-4">
-                  <Select value={teamFilter} onValueChange={setTeamFilter}>
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Equipe" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas Equipes</SelectItem>
-                      {teams.map((team) => (
-                        <SelectItem key={team.id} value={team.id}>
-                          {team.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className={cn("w-[150px]", dateFromFilter && "text-foreground")}>
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateFromFilter ? format(dateFromFilter, "dd/MM/yyyy") : "Data inicial"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={dateFromFilter}
-                        onSelect={setDateFromFilter}
-                        locale={ptBR}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className={cn("w-[150px]", dateToFilter && "text-foreground")}>
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateToFilter ? format(dateToFilter, "dd/MM/yyyy") : "Data final"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={dateToFilter}
-                        onSelect={setDateToFilter}
-                        locale={ptBR}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  {(teamFilter !== "all" || dateFromFilter || dateToFilter) && (
-                    <Button variant="ghost" size="sm" onClick={clearFilters}>
-                      <X className="h-4 w-4 mr-1" />
-                      Limpar
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardDescription>Total de Serviços</CardDescription>
-                  <CardTitle className="text-3xl">{analyticsData.length}</CardTitle>
-                </CardHeader>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardDescription>Quantidade Total</CardDescription>
-                  <CardTitle className="text-3xl">{analyticsTotals.quantity.toLocaleString("pt-BR")}</CardTitle>
-                </CardHeader>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardDescription>Valor Total</CardDescription>
-                  <CardTitle className="text-3xl text-primary">{formatCurrency(analyticsTotals.value)}</CardTitle>
-                </CardHeader>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Serviços Agrupados por UP</CardTitle>
-                <CardDescription>Quantidade e valor somados de todas as OSEs filtradas</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>UP</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead>Unidade</TableHead>
-                      <TableHead className="text-right">Qtd Total</TableHead>
-                      <TableHead className="text-right">Preço Unit.</TableHead>
-                      <TableHead className="text-right">Valor Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {analyticsData.map((item) => (
-                      <TableRow key={item.up}>
-                        <TableCell className="font-medium">{item.up}</TableCell>
-                        <TableCell className="max-w-[300px] truncate">{item.description}</TableCell>
-                        <TableCell>{item.unit}</TableCell>
-                        <TableCell className="text-right font-medium">
-                          {item.totalQuantity.toLocaleString("pt-BR")}
-                        </TableCell>
-                        <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
-                        <TableCell className="text-right font-bold text-primary">
-                          {formatCurrency(item.totalValue)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                {analyticsData.length > 0 && (
-                  <div className="flex justify-end mt-4 pt-4 border-t">
-                    <div className="text-right">
-                      <span className="text-muted-foreground">Total Geral:</span>
-                      <span className="ml-2 text-2xl font-bold text-primary">
-                        {formatCurrency(analyticsTotals.value)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {analyticsData.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Nenhum dado encontrado para os filtros selecionados.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <AnalyticsTab
+              allOseItems={allOseItems}
+              teams={teams}
+              teamFilter={teamFilter}
+              setTeamFilter={setTeamFilter}
+              dateFromFilter={dateFromFilter}
+              setDateFromFilter={setDateFromFilter}
+              dateToFilter={dateToFilter}
+              setDateToFilter={setDateToFilter}
+              clearFilters={clearFilters}
+              oses={oses}
+            />
           </TabsContent>
 
           <TabsContent value="catalog" className="space-y-4">
