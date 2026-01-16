@@ -63,7 +63,8 @@ const Departures = () => {
   const [wizardData, setWizardData] = useState<Record<string, DepartureFormData>>({});
   
   // Admin filter state
-  const [filterDate, setFilterDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [filterStartDate, setFilterStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [filterEndDate, setFilterEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [filterSupervisor, setFilterSupervisor] = useState<string>("all");
   
   // Admin edit state
@@ -122,12 +123,14 @@ const Departures = () => {
 
   // Fetch departures for the table
   const { data: departures = [], isLoading } = useQuery({
-    queryKey: ["departures", filterDate, filterSupervisor],
+    queryKey: ["departures", filterStartDate, filterEndDate, filterSupervisor],
     queryFn: async () => {
       let query = supabase
         .from("departures")
         .select("*, teams(name, type)")
-        .eq("date", filterDate)
+        .gte("date", filterStartDate)
+        .lte("date", filterEndDate)
+        .order("date", { ascending: false })
         .order("created_at", { ascending: false });
       
       if (filterSupervisor !== "all") {
@@ -387,15 +390,25 @@ const Departures = () => {
       {isAdmin && (
         <Card className="mb-6">
           <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
               <div>
-                <Label htmlFor="filter-date">Data</Label>
+                <Label htmlFor="filter-start-date">Data Início</Label>
                 <Input
-                  id="filter-date"
+                  id="filter-start-date"
                   type="date"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  className="w-48 mt-1"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                  className="w-44 mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="filter-end-date">Data Fim</Label>
+                <Input
+                  id="filter-end-date"
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
+                  className="w-44 mt-1"
                 />
               </div>
               <div>
@@ -424,11 +437,14 @@ const Departures = () => {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            Lançamentos - {format(new Date(filterDate + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR })}
+            Lançamentos - {filterStartDate === filterEndDate 
+              ? format(new Date(filterStartDate + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR })
+              : `${format(new Date(filterStartDate + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR })} a ${format(new Date(filterEndDate + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR })}`
+            }
           </CardTitle>
           <ExportButton
             data={departures}
-            filename={`saidas-${filterDate}`}
+            filename={`saidas-${filterStartDate}-a-${filterEndDate}`}
             columns={departuresCsvColumns}
           />
         </CardHeader>
