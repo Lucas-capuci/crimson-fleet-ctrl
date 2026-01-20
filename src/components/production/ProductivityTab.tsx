@@ -57,18 +57,25 @@ const ENTRY_TYPE_LABELS: Record<string, string> = {
   validado_eqtl: "Validado EQTL",
 };
 
+// Custom colors for productivity chart
+const PRODUCTIVITY_COLORS = {
+  programado: "#1e3a5f",    // Dark blue
+  executado: "#1a5235",     // Dark green
+  validado_eqtl: "#c55a11", // Dark orange
+};
+
 const chartConfig = {
   programado: {
     label: "Programado",
-    color: "hsl(var(--chart-1))",
+    color: PRODUCTIVITY_COLORS.programado,
   },
   executado: {
     label: "Executado",
-    color: "hsl(var(--chart-2))",
+    color: PRODUCTIVITY_COLORS.executado,
   },
   validado_eqtl: {
     label: "Validado EQTL",
-    color: "hsl(var(--chart-3))",
+    color: PRODUCTIVITY_COLORS.validado_eqtl,
   },
 };
 
@@ -576,21 +583,21 @@ export function ProductivityTab() {
                       <Bar 
                         dataKey="programado" 
                         name="Programado" 
-                        fill="hsl(var(--primary))" 
+                        fill={PRODUCTIVITY_COLORS.programado}
                         radius={[0, 4, 4, 0]} 
                         barSize={18}
                       />
                       <Bar 
                         dataKey="executado" 
                         name="Executado" 
-                        fill="hsl(var(--chart-2))" 
+                        fill={PRODUCTIVITY_COLORS.executado}
                         radius={[0, 4, 4, 0]} 
                         barSize={18}
                       />
                       <Bar 
                         dataKey="validado_eqtl" 
                         name="Validado EQTL" 
-                        fill="hsl(var(--chart-3))" 
+                        fill={PRODUCTIVITY_COLORS.validado_eqtl}
                         radius={[0, 4, 4, 0]} 
                         barSize={18}
                       />
@@ -650,7 +657,7 @@ export function ProductivityTab() {
                               <TableCell rowSpan={3} className="sticky left-0 bg-background z-10 font-medium border-b">
                                 {team.name}
                               </TableCell>
-                              <TableCell className="sticky left-[120px] bg-background z-10 text-xs text-primary font-medium">
+                              <TableCell className="sticky left-[120px] bg-background z-10 text-xs font-medium" style={{ color: PRODUCTIVITY_COLORS.programado }}>
                                 Programado
                               </TableCell>
                               {allDays.map(day => {
@@ -668,7 +675,7 @@ export function ProductivityTab() {
                             </TableRow>
                             {/* Executado row */}
                             <TableRow key={`${team.id}-executado`}>
-                              <TableCell className="sticky left-[120px] bg-background z-10 text-xs text-chart-2 font-medium">
+                              <TableCell className="sticky left-[120px] bg-background z-10 text-xs font-medium" style={{ color: PRODUCTIVITY_COLORS.executado }}>
                                 Executado
                               </TableCell>
                               {allDays.map(day => {
@@ -686,7 +693,7 @@ export function ProductivityTab() {
                             </TableRow>
                             {/* Validado EQTL row */}
                             <TableRow key={`${team.id}-validado`} className="border-b-2">
-                              <TableCell className="sticky left-[120px] bg-background z-10 text-xs text-chart-3 font-medium">
+                              <TableCell className="sticky left-[120px] bg-background z-10 text-xs font-medium" style={{ color: PRODUCTIVITY_COLORS.validado_eqtl }}>
                                 Validado EQTL
                               </TableCell>
                               {allDays.map(day => {
