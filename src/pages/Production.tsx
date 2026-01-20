@@ -16,6 +16,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ProductivityTab } from "@/components/production/ProductivityTab";
 
 interface ProductionData {
   id: string;
@@ -260,9 +262,18 @@ export default function Production() {
               Acompanhamento de produção das equipes
             </p>
           </div>
+        </div>
+
+        {/* Tabs */}
+        <Tabs defaultValue="producao" className="w-full">
+          <TabsList className="tabs-mobile">
+            <TabsTrigger value="producao">Produção</TabsTrigger>
+            <TabsTrigger value="produtividade">Produtividade</TabsTrigger>
+          </TabsList>
           
-          {/* Filters - Responsive Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-wrap gap-2">
+          <TabsContent value="producao" className="space-y-6 mt-4">
+            {/* Filters - Responsive Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-wrap gap-2">
             {/* Date Filter Type */}
             <Select value={dateFilterType} onValueChange={(value) => {
               setDateFilterType(value);
@@ -419,14 +430,13 @@ export default function Production() {
             </Button>
           </div>
 
-          {/* Date Range Display */}
-          <div className="text-sm text-muted-foreground">
-            Período: <span className="font-medium text-foreground">{getDateRangeLabel()}</span>
-          </div>
-        </div>
+            {/* Date Range Display */}
+            <div className="text-sm text-muted-foreground">
+              Período: <span className="font-medium text-foreground">{getDateRangeLabel()}</span>
+            </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
@@ -652,7 +662,13 @@ export default function Production() {
               </div>
             )}
           </CardContent>
-        </Card>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="produtividade" className="mt-4">
+            <ProductivityTab />
+          </TabsContent>
+        </Tabs>
       </div>
     </MainLayout>
   );

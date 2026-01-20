@@ -564,6 +564,47 @@ export type Database = {
           },
         ]
       }
+      productivity_entries: {
+        Row: {
+          created_at: string
+          created_by: string
+          date: string
+          entry_type: string
+          id: string
+          team_id: string
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          date: string
+          entry_type: string
+          id?: string
+          team_id: string
+          updated_at?: string
+          value?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          date?: string
+          entry_type?: string
+          id?: string
+          team_id?: string
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "productivity_entries_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profile_permissions: {
         Row: {
           action: Database["public"]["Enums"]["permission_action"]
