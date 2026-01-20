@@ -2,7 +2,6 @@ import { NavLink } from "@/components/NavLink";
 import {
   LayoutDashboard,
   Car,
-  Users,
   Menu,
   X,
   Truck,
@@ -35,13 +34,12 @@ const navItems: NavItem[] = [
   { title: "Gestão de Frotas", url: "/frotas", icon: Car, page: "vehicles" },
   { title: "Escala", url: "/escala", icon: CalendarDays, page: "schedule" },
   { title: "Saída", url: "/saida", icon: LogIn, page: "departures" },
-  { title: "Motoristas", url: "/motoristas", icon: Users, page: "drivers" },
   { title: "Produção", url: "/producao", icon: BarChart3, page: "production" },
   { title: "Orçamento", url: "/orcamento", icon: FileText, page: "budget" as PageName },
   { title: "Relatórios", url: "/relatorios", icon: ClipboardCheck, page: "reports" as PageName, adminOnly: true },
 ];
 
-// Pages allowed for Frotas profile (now just vehicles which includes workshop)
+// Pages allowed for Frotas profile (now just vehicles which includes workshop and drivers)
 const FROTAS_ALLOWED_PAGES: PageName[] = ["vehicles"];
 
 export function Sidebar() {
@@ -58,9 +56,9 @@ export function Sidebar() {
     if (item.adminOnly) {
       return userRole === "admin" || userRole === "gestor" || isProgramacao;
     }
-    // For vehicles page, also allow if user has workshop permission
+    // For vehicles page, also allow if user has workshop or drivers permission
     if (item.page === "vehicles") {
-      return canViewPage("vehicles") || canViewPage("workshop");
+      return canViewPage("vehicles") || canViewPage("workshop") || canViewPage("drivers");
     }
     return canViewPage(item.page);
   });

@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/popover";
 import { 
   Plus, Search, Edit, Trash2, Car, Wrench, Clock, CheckCircle, 
-  Calendar, LogOut, ChevronsUpDown, Check, Building 
+  Calendar, LogOut, ChevronsUpDown, Check, Building, User, Phone
 } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn, formatDateTime } from "@/lib/exportCsv";
@@ -108,6 +108,16 @@ const workshopStatusConfig = {
   concluida: { label: "Concluída", icon: CheckCircle, className: "status-available" },
 };
 
+// ==================== DRIVERS TYPES ====================
+interface Driver {
+  id: string;
+  name: string;
+  matricula: string;
+  funcao: string;
+  team_id: string | null;
+  contato: string | null;
+}
+
 const FleetManagement = () => {
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
@@ -146,6 +156,18 @@ const FleetManagement = () => {
     reason: "",
     notes: "",
     status: "em_andamento" as MaintenanceStatus,
+  });
+
+  // ==================== DRIVERS STATE ====================
+  const [driverSearchTerm, setDriverSearchTerm] = useState("");
+  const [isDriverDialogOpen, setIsDriverDialogOpen] = useState(false);
+  const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
+  const [driverFormData, setDriverFormData] = useState({
+    name: "",
+    matricula: "",
+    funcao: "",
+    team_id: "",
+    contato: "",
   });
 
   // ==================== SHARED QUERIES ====================
@@ -219,6 +241,19 @@ const FleetManagement = () => {
         .order("entry_date", { ascending: false });
       if (error) throw error;
       return data as WorkshopEntry[];
+    },
+  });
+
+  // ==================== DRIVERS QUERIES ====================
+  const { data: drivers = [], isLoading: isLoadingDrivers } = useQuery({
+    queryKey: ["drivers"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("drivers")
+        .select("id, name, matricula, funcao, team_id, contato")
+        .order("name");
+      if (error) throw error;
+      return data as Driver[];
     },
   });
 
@@ -361,6 +396,68 @@ const FleetManagement = () => {
     },
   });
 
+  // ==================== DRIVER MUTATIONS ====================
+  const createDriver = useMutation({
+    mutationFn: async (data: typeof driverFormData) => {
+      const { error } = await supabase
+        .from("drivers")
+        .insert({ 
+          name: data.name,
+          matricula: data.matricula,
+          funcao: data.funcao,
+          team_id: data.team_id || null,
+          contato: data.contato || null,
+        });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["drivers"] });
+      toast({ title: "Motorista cadastrado com sucesso!" });
+      resetDriverForm();
+    },
+    onError: (error) => {
+      toast({ title: "Erro ao cadastrar motorista", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateDriver = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof driverFormData }) => {
+      const { error } = await supabase
+        .from("drivers")
+        .update({ 
+          name: data.name,
+          matricula: data.matricula,
+          funcao: data.funcao,
+          team_id: data.team_id || null,
+          contato: data.contato || null,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["drivers"] });
+      toast({ title: "Motorista atualizado com sucesso!" });
+      resetDriverForm();
+    },
+    onError: (error) => {
+      toast({ title: "Erro ao atualizar motorista", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteDriver = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("drivers").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["drivers"] });
+      toast({ title: "Motorista removido com sucesso!" });
+    },
+    onError: (error) => {
+      toast({ title: "Erro ao remover motorista", description: error.message, variant: "destructive" });
+    },
+  });
+
   // ==================== HELPERS ====================
   const getTeamName = (teamId: string | null) => {
     if (!teamId) return null;
@@ -410,6 +507,12 @@ const FleetManagement = () => {
   const activeEntries = workshopEntries.filter((e) => e.status !== "concluida");
   const completedEntries = workshopEntries.filter((e) => e.status === "concluida");
 
+  const filteredDrivers = drivers.filter((d) =>
+    d.name.toLowerCase().includes(driverSearchTerm.toLowerCase()) ||
+    d.matricula.includes(driverSearchTerm) ||
+    (getTeamName(d.team_id)?.toLowerCase().includes(driverSearchTerm.toLowerCase()) || false)
+  );
+
   // ==================== CSV COLUMNS ====================
   const vehicleCsvColumns: CsvColumn[] = [
     { key: "plate", header: "Placa" },
@@ -429,6 +532,14 @@ const FleetManagement = () => {
     { key: "exit_date", header: "Saída", format: (v) => formatDateTime(v) },
     { key: "status", header: "Status", format: (v) => workshopStatusConfig[v as MaintenanceStatus]?.label || v },
     { key: "notes", header: "Observações", format: (v) => v || "-" },
+  ];
+
+  const driversCsvColumns: CsvColumn[] = [
+    { key: "name", header: "Nome" },
+    { key: "matricula", header: "Matrícula" },
+    { key: "funcao", header: "Função" },
+    { key: "team_id", header: "Equipe", format: (v) => getTeamName(v) || "-" },
+    { key: "contato", header: "Contato", format: (v) => v || "-" },
   ];
 
   // ==================== HANDLERS ====================
@@ -513,6 +624,39 @@ const FleetManagement = () => {
     setIsWorkshopDialogOpen(false);
   };
 
+  const handleDriverSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingDriver) {
+      updateDriver.mutate({ id: editingDriver.id, data: driverFormData });
+    } else {
+      createDriver.mutate(driverFormData);
+    }
+  };
+
+  const handleEditDriver = (driver: Driver) => {
+    setEditingDriver(driver);
+    setDriverFormData({
+      name: driver.name,
+      matricula: driver.matricula,
+      funcao: driver.funcao,
+      team_id: driver.team_id || "",
+      contato: driver.contato || "",
+    });
+    setIsDriverDialogOpen(true);
+  };
+
+  const handleDeleteDriver = (id: string) => {
+    if (confirm("Tem certeza que deseja remover este motorista?")) {
+      deleteDriver.mutate(id);
+    }
+  };
+
+  const resetDriverForm = () => {
+    setDriverFormData({ name: "", matricula: "", funcao: "", team_id: "", contato: "" });
+    setEditingDriver(null);
+    setIsDriverDialogOpen(false);
+  };
+
   // ==================== WORKSHOP ENTRY CARD ====================
   const EntryCard = ({ entry }: { entry: WorkshopEntry }) => {
     const status = workshopStatusConfig[entry.status];
@@ -590,7 +734,7 @@ const FleetManagement = () => {
     <MainLayout>
       <div className="mb-8 animate-fade-in">
         <h1 className="text-3xl font-bold text-foreground mb-2">Gestão de Frotas</h1>
-        <p className="text-muted-foreground">Gerencie veículos e controle de oficina</p>
+        <p className="text-muted-foreground">Gerencie veículos, oficina e motoristas</p>
       </div>
 
       <Tabs defaultValue="vehicles" className="animate-fade-in">
@@ -602,6 +746,10 @@ const FleetManagement = () => {
           <TabsTrigger value="workshop" className="gap-2">
             <Building className="h-4 w-4" />
             Oficina
+          </TabsTrigger>
+          <TabsTrigger value="drivers" className="gap-2">
+            <User className="h-4 w-4" />
+            Motoristas
           </TabsTrigger>
         </TabsList>
 
@@ -1062,6 +1210,179 @@ const FleetManagement = () => {
               )}
             </TabsContent>
           </Tabs>
+        </TabsContent>
+
+        {/* ==================== DRIVERS TAB ==================== */}
+        <TabsContent value="drivers">
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome, matrícula ou equipe..."
+                value={driverSearchTerm}
+                onChange={(e) => setDriverSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <ExportButton
+              data={filteredDrivers}
+              filename={`motoristas-${new Date().toISOString().split('T')[0]}`}
+              columns={driversCsvColumns}
+            />
+            {isAdmin && (
+              <Dialog open={isDriverDialogOpen} onOpenChange={(open) => { if (!open) resetDriverForm(); else setIsDriverDialogOpen(true); }}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Novo Motorista
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>{editingDriver ? "Editar Motorista" : "Novo Motorista"}</DialogTitle>
+                    <DialogDescription>
+                      {editingDriver ? "Atualize os dados do motorista" : "Preencha os dados do novo motorista"}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleDriverSubmit} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="driver_name">Nome</Label>
+                        <Input
+                          id="driver_name"
+                          value={driverFormData.name}
+                          onChange={(e) => setDriverFormData({ ...driverFormData, name: e.target.value })}
+                          placeholder="Nome completo"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="driver_matricula">Matrícula</Label>
+                        <Input
+                          id="driver_matricula"
+                          value={driverFormData.matricula}
+                          onChange={(e) => setDriverFormData({ ...driverFormData, matricula: e.target.value })}
+                          placeholder="001234"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="driver_funcao">Função</Label>
+                        <Input
+                          id="driver_funcao"
+                          value={driverFormData.funcao}
+                          onChange={(e) => setDriverFormData({ ...driverFormData, funcao: e.target.value })}
+                          placeholder="Motorista"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="driver_team">Equipe</Label>
+                        <Select
+                          value={driverFormData.team_id || "none"}
+                          onValueChange={(value) => setDriverFormData({ ...driverFormData, team_id: value === "none" ? "" : value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione uma equipe" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nenhuma</SelectItem>
+                            {teams.map((team) => (
+                              <SelectItem key={team.id} value={team.id}>
+                                {team.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="driver_contato">Contato</Label>
+                      <Input
+                        id="driver_contato"
+                        value={driverFormData.contato}
+                        onChange={(e) => setDriverFormData({ ...driverFormData, contato: e.target.value })}
+                        placeholder="(11) 99999-9999"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4">
+                      <Button type="button" variant="outline" onClick={resetDriverForm}>Cancelar</Button>
+                      <Button type="submit" disabled={createDriver.isPending || updateDriver.isPending}>
+                        {editingDriver ? "Atualizar" : "Cadastrar"}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+
+          {/* Drivers Table */}
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Matrícula</TableHead>
+                  <TableHead>Função</TableHead>
+                  <TableHead>Equipe</TableHead>
+                  <TableHead>Contato</TableHead>
+                  {isAdmin && <TableHead className="text-right">Ações</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredDrivers.map((driver) => (
+                  <TableRow key={driver.id} className="hover:bg-muted/30">
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <User className="h-4 w-4 text-primary" />
+                        </div>
+                        {driver.name}
+                      </div>
+                    </TableCell>
+                    <TableCell>{driver.matricula}</TableCell>
+                    <TableCell>{driver.funcao}</TableCell>
+                    <TableCell>
+                      {getTeamName(driver.team_id) || <span className="text-muted-foreground">-</span>}
+                    </TableCell>
+                    <TableCell>
+                      {driver.contato ? (
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <Phone className="h-3.5 w-3.5" />
+                          {driver.contato}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    {isAdmin && (
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => handleEditDriver(driver)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteDriver(driver.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {isLoadingDrivers && (
+              <div className="p-8 text-center text-muted-foreground">Carregando...</div>
+            )}
+            {!isLoadingDrivers && filteredDrivers.length === 0 && (
+              <div className="p-8 text-center text-muted-foreground">
+                Nenhum motorista encontrado
+              </div>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
     </MainLayout>
