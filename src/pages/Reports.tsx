@@ -107,7 +107,6 @@ export default function Reports() {
     data: format(new Date(), "yyyy-MM-dd"),
     tipo_relatorio: "",
     responsavel: "",
-    horario_envio: "",
     status: "NO_HORARIO" as ReportStatus,
   });
   
@@ -194,7 +193,6 @@ export default function Reports() {
       data: string;
       tipo_relatorio: string;
       responsavel: string;
-      horario_envio: string | null;
       status: ReportStatus;
     }) => {
       const config = configs.find((c) => c.tipo_relatorio === data.tipo_relatorio);
@@ -213,11 +211,10 @@ export default function Reports() {
         data: data.data,
         tipo_relatorio: data.tipo_relatorio,
         responsavel: data.responsavel,
-        horario_envio: data.horario_envio || null,
+        horario_envio: null,
         status: data.status,
         pontos_calculados: pontos,
       });
-      
       if (error) throw error;
     },
     onSuccess: () => {
@@ -228,7 +225,6 @@ export default function Reports() {
         data: format(new Date(), "yyyy-MM-dd"),
         tipo_relatorio: "",
         responsavel: "",
-        horario_envio: "",
         status: "NO_HORARIO",
       });
     },
@@ -340,7 +336,6 @@ export default function Reports() {
       data: formData.data,
       tipo_relatorio: formData.tipo_relatorio,
       responsavel: formData.responsavel,
-      horario_envio: formData.status !== "ESQUECEU_ERRO" ? formData.horario_envio : null,
       status: formData.status,
     });
   };
@@ -395,7 +390,6 @@ export default function Reports() {
     { key: "data", header: "Data" },
     { key: "tipo_relatorio", header: "Tipo Relatório" },
     { key: "responsavel", header: "Responsável" },
-    { key: "horario_envio", header: "Horário Envio" },
     { key: "status", header: "Status" },
     { key: "pontos_calculados", header: "Pontos" },
   ];
@@ -674,19 +668,6 @@ export default function Reports() {
                       </div>
                     </div>
                     
-                    {formData.status !== "ESQUECEU_ERRO" && (
-                      <div className="max-w-xs">
-                        <Label>Horário do Envio</Label>
-                        <Input
-                          type="time"
-                          value={formData.horario_envio}
-                          onChange={(e) =>
-                            setFormData({ ...formData, horario_envio: e.target.value })
-                          }
-                          className="mt-1"
-                        />
-                      </div>
-                    )}
                     
                     <Button type="submit" disabled={createEntryMutation.isPending}>
                       <CheckCircle2 className="h-4 w-4 mr-2" />
@@ -782,7 +763,6 @@ export default function Reports() {
                           <TableHead>Data</TableHead>
                           <TableHead>Tipo</TableHead>
                           <TableHead>Responsável</TableHead>
-                          <TableHead>Horário</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead className="text-right">Pontos</TableHead>
                           {isAdmin && <TableHead className="w-12"></TableHead>}
@@ -796,7 +776,6 @@ export default function Reports() {
                             </TableCell>
                             <TableCell>{item.tipo_relatorio}</TableCell>
                             <TableCell>{item.responsavel}</TableCell>
-                            <TableCell>{item.horario_envio || "-"}</TableCell>
                             <TableCell>{getStatusBadge(item.status)}</TableCell>
                             <TableCell className="text-right font-medium">
                               <span className={item.pontos_calculados >= 0 ? "text-green-600" : "text-red-600"}>
