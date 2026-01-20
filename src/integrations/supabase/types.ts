@@ -65,6 +65,45 @@ export type Database = {
           },
         ]
       }
+      controle_diario: {
+        Row: {
+          created_at: string
+          data: string
+          horario_envio: string | null
+          id: string
+          observacao: string | null
+          pontos_calculados: number
+          responsavel: string
+          status: string
+          tipo_relatorio: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          horario_envio?: string | null
+          id?: string
+          observacao?: string | null
+          pontos_calculados: number
+          responsavel: string
+          status: string
+          tipo_relatorio: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          horario_envio?: string | null
+          id?: string
+          observacao?: string | null
+          pontos_calculados?: number
+          responsavel?: string
+          status?: string
+          tipo_relatorio?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       departures: {
         Row: {
           created_at: string
@@ -584,6 +623,42 @@ export type Database = {
         }
         Relationships: []
       }
+      report_config: {
+        Row: {
+          created_at: string
+          horario_limite: string
+          id: string
+          pontos_esqueceu_ou_erro: number
+          pontos_fora_do_horario: number
+          pontos_no_horario: number
+          responsaveis: string[]
+          tipo_relatorio: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          horario_limite?: string
+          id?: string
+          pontos_esqueceu_ou_erro?: number
+          pontos_fora_do_horario?: number
+          pontos_no_horario?: number
+          responsaveis?: string[]
+          tipo_relatorio: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          horario_limite?: string
+          id?: string
+          pontos_esqueceu_ou_erro?: number
+          pontos_fora_do_horario?: number
+          pontos_no_horario?: number
+          responsaveis?: string[]
+          tipo_relatorio?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       service_catalog: {
         Row: {
           created_at: string
@@ -899,9 +974,27 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      ranking_pontos: {
+        Row: {
+          quantidade_erros: number | null
+          quantidade_fora_do_horario: number | null
+          quantidade_no_horario: number | null
+          responsavel: string | null
+          total_pontos: number | null
+          total_registros: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      calcular_pontos_relatorio: {
+        Args: {
+          p_horario_envio: string
+          p_status: string
+          p_tipo_relatorio: string
+        }
+        Returns: number
+      }
       can_access_ose: {
         Args: { _ose_id: string; _user_id: string }
         Returns: boolean

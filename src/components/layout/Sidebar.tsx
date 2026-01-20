@@ -14,6 +14,7 @@ import {
   CalendarDays,
   BarChart3,
   FileText,
+  ClipboardCheck,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ interface NavItem {
   url: string;
   icon: React.ComponentType<{ className?: string }>;
   page: PageName;
+  adminOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -38,6 +40,7 @@ const navItems: NavItem[] = [
   { title: "Motoristas", url: "/motoristas", icon: Users, page: "drivers" },
   { title: "Produção", url: "/producao", icon: BarChart3, page: "production" },
   { title: "Orçamento", url: "/orcamento", icon: FileText, page: "budget" as PageName },
+  { title: "Relatórios", url: "/relatorios", icon: ClipboardCheck, page: "reports" as PageName, adminOnly: true },
 ];
 
 // Pages allowed for Frotas profile
@@ -46,10 +49,19 @@ const FROTAS_ALLOWED_PAGES: PageName[] = ["vehicles", "workshop"];
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, isAdmin, userRole, signOut } = useAuth();
-  const { canViewPage, isFrotasProfile } = usePermissions();
+  const { canViewPage, isFrotasProfile, getUserProfileName } = usePermissions();
+
+  const profileName = getUserProfileName();
+  const isProgramacao = profileName === "Programação";
 
   // Filter nav items based on permissions
-  let visibleNavItems = navItems.filter((item) => canViewPage(item.page));
+  let visibleNavItems = navItems.filter((item) => {
+    // For adminOnly items, check if user is admin/gestor or has Programação profile
+    if (item.adminOnly) {
+      return userRole === "admin" || userRole === "gestor" || isProgramacao;
+    }
+    return canViewPage(item.page);
+  });
 
   // If user has Frotas profile, restrict to only vehicles and workshop
   if (isFrotasProfile()) {
