@@ -77,15 +77,15 @@ const Dashboard = () => {
   return (
     <MainLayout>
       {/* Header */}
-      <div className="mb-8 animate-fade-in">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Dashboard</h1>
-        <p className="text-muted-foreground">
+      <div className="mb-6 lg:mb-8 animate-fade-in">
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-1 sm:mb-2">Dashboard</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
           Visão geral do controle de frotas
         </p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
         <StatsCard
           title="Total de Veículos"
           value={vehicleStats?.total ?? 0}
@@ -93,7 +93,7 @@ const Dashboard = () => {
           variant="primary"
         />
         <StatsCard
-          title="Em Manutenção/Oficina"
+          title="Manutenção/Oficina"
           value={vehicleStats?.inMaintenance ?? 0}
           icon={Wrench}
           variant="warning"
