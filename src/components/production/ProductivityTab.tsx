@@ -84,6 +84,7 @@ export function ProductivityTab() {
   const queryClient = useQueryClient();
   
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), "yyyy-MM"));
+  const [selectedDayFilter, setSelectedDayFilter] = useState("all");
   const [selectedTeamFilter, setSelectedTeamFilter] = useState("all");
   const [selectedTeamTypeFilter, setSelectedTeamTypeFilter] = useState("all");
   const [selectedSupervisorFilter, setSelectedSupervisorFilter] = useState("all");
@@ -182,7 +183,7 @@ export function ProductivityTab() {
 
   // Fetch productivity entries
   const { data: entries = [], isLoading } = useQuery({
-    queryKey: ["productivity_entries", selectedMonth, selectedTeamFilter, selectedTeamTypeFilter, selectedSupervisorFilter],
+    queryKey: ["productivity_entries", selectedMonth, selectedTeamFilter, selectedTeamTypeFilter, selectedSupervisorFilter, selectedDayFilter],
     queryFn: async () => {
       let query = supabase
         .from("productivity_entries")
@@ -202,6 +203,10 @@ export function ProductivityTab() {
         query = query.eq("team_id", selectedTeamFilter);
       } else if (selectedSupervisorFilter !== "all" && supervisorTeamIds.length > 0) {
         query = query.in("team_id", supervisorTeamIds);
+      }
+
+      if (selectedDayFilter !== "all") {
+        query = query.eq("date", selectedDayFilter);
       }
 
       const { data, error } = await query;
@@ -404,6 +409,20 @@ export function ProductivityTab() {
           </SelectContent>
         </Select>
 
+        <Select value={selectedDayFilter} onValueChange={setSelectedDayFilter}>
+          <SelectTrigger className="w-[130px]">
+            <SelectValue placeholder="Dia" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os Dias</SelectItem>
+            {allDays.map(day => (
+              <SelectItem key={day.toISOString()} value={format(day, "yyyy-MM-dd")}>
+                {format(day, "dd/MM")}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <div className="flex-1" />
 
         {/* View Mode Toggle */}
@@ -586,21 +605,42 @@ export function ProductivityTab() {
                         fill={PRODUCTIVITY_COLORS.programado}
                         radius={[0, 4, 4, 0]} 
                         barSize={18}
-                      />
+                      >
+                        <LabelList 
+                          dataKey="programado" 
+                          position="right" 
+                          formatter={(value: number) => value > 0 ? value.toLocaleString("pt-BR") : ""}
+                          style={{ fontSize: 10, fontWeight: 500, fill: PRODUCTIVITY_COLORS.programado }}
+                        />
+                      </Bar>
                       <Bar 
                         dataKey="executado" 
                         name="Executado" 
                         fill={PRODUCTIVITY_COLORS.executado}
                         radius={[0, 4, 4, 0]} 
                         barSize={18}
-                      />
+                      >
+                        <LabelList 
+                          dataKey="executado" 
+                          position="right" 
+                          formatter={(value: number) => value > 0 ? value.toLocaleString("pt-BR") : ""}
+                          style={{ fontSize: 10, fontWeight: 500, fill: PRODUCTIVITY_COLORS.executado }}
+                        />
+                      </Bar>
                       <Bar 
                         dataKey="validado_eqtl" 
                         name="Validado EQTL" 
                         fill={PRODUCTIVITY_COLORS.validado_eqtl}
                         radius={[0, 4, 4, 0]} 
                         barSize={18}
-                      />
+                      >
+                        <LabelList 
+                          dataKey="validado_eqtl" 
+                          position="right" 
+                          formatter={(value: number) => value > 0 ? value.toLocaleString("pt-BR") : ""}
+                          style={{ fontSize: 10, fontWeight: 500, fill: PRODUCTIVITY_COLORS.validado_eqtl }}
+                        />
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartContainer>
