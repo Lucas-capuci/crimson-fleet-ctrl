@@ -8,7 +8,6 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import FleetManagement from "./pages/FleetManagement";
-import Drivers from "./pages/Drivers";
 import Teams from "./pages/Teams";
 import Departures from "./pages/Departures";
 import Schedule from "./pages/Schedule";
@@ -31,7 +30,6 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/frotas" element={<ProtectedRoute><FleetManagement /></ProtectedRoute>} />
-            <Route path="/motoristas" element={<ProtectedRoute><Drivers /></ProtectedRoute>} />
             <Route path="/equipes" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
             <Route path="/escala" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
             <Route path="/saida" element={<ProtectedRoute><Departures /></ProtectedRoute>} />
