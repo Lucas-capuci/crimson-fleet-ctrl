@@ -15,12 +15,12 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Legend, CartesianGrid } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Legend, CartesianGrid, Cell, LabelList } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 interface ProductivityEntry {
@@ -330,6 +330,9 @@ export function ProductivityTab() {
     );
   };
 
+  // State for view mode
+  const [viewMode, setViewMode] = useState<"table" | "chart">("table");
+
   return (
     <div className="space-y-4">
       {/* Filters */}
@@ -396,48 +399,19 @@ export function ProductivityTab() {
 
         <div className="flex-1" />
 
-        {/* Chart Sheet */}
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="sm">
-              <BarChart3 className="mr-2 h-4 w-4" />
+        {/* View Mode Toggle */}
+        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "table" | "chart")} className="hidden sm:block">
+          <TabsList className="h-9">
+            <TabsTrigger value="table" className="px-3">
+              <TableIcon className="h-4 w-4 mr-1" />
+              Tabela
+            </TabsTrigger>
+            <TabsTrigger value="chart" className="px-3">
+              <BarChart3 className="h-4 w-4 mr-1" />
               Gráfico
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right" className="w-full sm:max-w-lg">
-            <SheetHeader>
-              <SheetTitle>Comparativo de Produtividade</SheetTitle>
-            </SheetHeader>
-            <div className="mt-4 h-[calc(100vh-120px)]">
-              {chartData.length > 0 ? (
-                <ChartContainer config={chartConfig} className="h-full w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 10, top: 10, bottom: 10 }}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 10 }} />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        width={80}
-                        tick={{ fontSize: 10 }}
-                        tickFormatter={(value) => value.length > 12 ? `${value.substring(0, 12)}...` : value}
-                      />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Legend />
-                      <Bar dataKey="programado" name="Programado" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} />
-                      <Bar dataKey="executado" name="Executado" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
-                      <Bar dataKey="validado_eqtl" name="Validado EQTL" fill="hsl(var(--chart-3))" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              ) : (
-                <div className="flex h-full items-center justify-center text-muted-foreground">
-                  Nenhum dado disponível
-                </div>
-              )}
-            </div>
-          </SheetContent>
-        </Sheet>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* Add Entry Button */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -535,115 +509,215 @@ export function ProductivityTab() {
         </Dialog>
       </div>
 
-      {/* Monthly Table */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-            <TableIcon className="h-5 w-5" />
-            Acompanhamento Mensal - {format(monthStart, "MMMM yyyy", { locale: ptBR })}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 sm:p-6">
-          {isLoading ? (
-            <div className="space-y-2 p-4">
-              {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : filteredTeams.length > 0 ? (
-            <ScrollArea className="w-full">
-              <div className="min-w-[800px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="sticky left-0 bg-background z-10 min-w-[120px]">Equipe</TableHead>
-                      <TableHead className="sticky left-[120px] bg-background z-10 min-w-[100px]">Tipo</TableHead>
-                      {allDays.map(day => (
-                        <TableHead key={day.toISOString()} className="text-center min-w-[60px] text-xs">
-                          {format(day, "dd/MM")}
-                        </TableHead>
-                      ))}
-                      <TableHead className="text-center min-w-[80px] bg-muted font-bold">Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredTeams.map(team => {
-                      const teamData = entriesByTeam.get(team.id) || new Map();
-                      
-                      return (
-                        <>
-                          {/* Programado row */}
-                          <TableRow key={`${team.id}-programado`}>
-                            <TableCell rowSpan={3} className="sticky left-0 bg-background z-10 font-medium border-b">
-                              {team.name}
-                            </TableCell>
-                            <TableCell className="sticky left-[120px] bg-background z-10 text-xs text-primary font-medium">
-                              Programado
-                            </TableCell>
-                            {allDays.map(day => {
-                              const dateKey = format(day, "yyyy-MM-dd");
-                              const value = teamData.get(dateKey)?.programado || 0;
-                              return (
-                                <TableCell key={day.toISOString()} className="text-center text-xs">
-                                  {value > 0 ? value.toLocaleString("pt-BR") : "-"}
-                                </TableCell>
-                              );
-                            })}
-                            <TableCell className="text-center font-bold bg-muted text-xs">
-                              {Array.from(teamData.values()).reduce((sum, d) => sum + (d.programado || 0), 0).toLocaleString("pt-BR")}
-                            </TableCell>
-                          </TableRow>
-                          {/* Executado row */}
-                          <TableRow key={`${team.id}-executado`}>
-                            <TableCell className="sticky left-[120px] bg-background z-10 text-xs text-chart-2 font-medium">
-                              Executado
-                            </TableCell>
-                            {allDays.map(day => {
-                              const dateKey = format(day, "yyyy-MM-dd");
-                              const value = teamData.get(dateKey)?.executado || 0;
-                              return (
-                                <TableCell key={day.toISOString()} className="text-center text-xs">
-                                  {value > 0 ? value.toLocaleString("pt-BR") : "-"}
-                                </TableCell>
-                              );
-                            })}
-                            <TableCell className="text-center font-bold bg-muted text-xs">
-                              {Array.from(teamData.values()).reduce((sum, d) => sum + (d.executado || 0), 0).toLocaleString("pt-BR")}
-                            </TableCell>
-                          </TableRow>
-                          {/* Validado EQTL row */}
-                          <TableRow key={`${team.id}-validado`} className="border-b-2">
-                            <TableCell className="sticky left-[120px] bg-background z-10 text-xs text-chart-3 font-medium">
-                              Validado EQTL
-                            </TableCell>
-                            {allDays.map(day => {
-                              const dateKey = format(day, "yyyy-MM-dd");
-                              const value = teamData.get(dateKey)?.validado_eqtl || 0;
-                              return (
-                                <TableCell key={day.toISOString()} className="text-center text-xs">
-                                  {value > 0 ? value.toLocaleString("pt-BR") : "-"}
-                                </TableCell>
-                              );
-                            })}
-                            <TableCell className="text-center font-bold bg-muted text-xs">
-                              {Array.from(teamData.values()).reduce((sum, d) => sum + (d.validado_eqtl || 0), 0).toLocaleString("pt-BR")}
-                            </TableCell>
-                          </TableRow>
-                        </>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+      {/* Mobile view toggle */}
+      <div className="flex sm:hidden gap-2 mb-4">
+        <Button
+          variant={viewMode === "table" ? "default" : "outline"}
+          size="sm"
+          className="flex-1"
+          onClick={() => setViewMode("table")}
+        >
+          <TableIcon className="h-4 w-4 mr-1" />
+          Tabela
+        </Button>
+        <Button
+          variant={viewMode === "chart" ? "default" : "outline"}
+          size="sm"
+          className="flex-1"
+          onClick={() => setViewMode("chart")}
+        >
+          <BarChart3 className="h-4 w-4 mr-1" />
+          Gráfico
+        </Button>
+      </div>
+
+      {/* Chart View */}
+      {viewMode === "chart" && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+              <BarChart3 className="h-5 w-5" />
+              Comparativo de Produtividade - {format(monthStart, "MMMM yyyy", { locale: ptBR })}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {chartData.length > 0 ? (
+              <div style={{ height: Math.max(300, chartData.length * 80) }}>
+                <ChartContainer config={chartConfig} className="h-full w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart 
+                      data={chartData} 
+                      layout="vertical" 
+                      margin={{ left: 0, right: 20, top: 20, bottom: 20 }}
+                      barCategoryGap="20%"
+                    >
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
+                      <XAxis 
+                        type="number" 
+                        tick={{ fontSize: 11 }} 
+                        tickFormatter={(value) => value.toLocaleString("pt-BR")}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        width={100}
+                        tick={{ fontSize: 11, fontWeight: 500 }}
+                        tickFormatter={(value) => value.length > 12 ? `${value.substring(0, 10)}...` : value}
+                      />
+                      <ChartTooltip 
+                        content={<ChartTooltipContent />} 
+                        cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }}
+                      />
+                      <Legend 
+                        wrapperStyle={{ paddingTop: 20 }}
+                        iconType="square"
+                        iconSize={12}
+                      />
+                      <Bar 
+                        dataKey="programado" 
+                        name="Programado" 
+                        fill="hsl(var(--primary))" 
+                        radius={[0, 4, 4, 0]} 
+                        barSize={18}
+                      />
+                      <Bar 
+                        dataKey="executado" 
+                        name="Executado" 
+                        fill="hsl(var(--chart-2))" 
+                        radius={[0, 4, 4, 0]} 
+                        barSize={18}
+                      />
+                      <Bar 
+                        dataKey="validado_eqtl" 
+                        name="Validado EQTL" 
+                        fill="hsl(var(--chart-3))" 
+                        radius={[0, 4, 4, 0]} 
+                        barSize={18}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
               </div>
-              <ScrollBar orientation="horizontal" />
-            </ScrollArea>
-          ) : (
-            <div className="flex h-32 items-center justify-center text-muted-foreground text-sm">
-              Nenhuma equipe encontrada com os filtros selecionados
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            ) : (
+              <div className="flex h-64 items-center justify-center text-muted-foreground">
+                Nenhum dado disponível para o período selecionado
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Monthly Table View */}
+      {viewMode === "table" && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+              <TableIcon className="h-5 w-5" />
+              Acompanhamento Mensal - {format(monthStart, "MMMM yyyy", { locale: ptBR })}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0 sm:p-6">
+            {isLoading ? (
+              <div className="space-y-2 p-4">
+                {[...Array(5)].map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : filteredTeams.length > 0 ? (
+              <ScrollArea className="w-full">
+                <div className="min-w-[800px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="sticky left-0 bg-background z-10 min-w-[120px]">Equipe</TableHead>
+                        <TableHead className="sticky left-[120px] bg-background z-10 min-w-[100px]">Tipo</TableHead>
+                        {allDays.map(day => (
+                          <TableHead key={day.toISOString()} className="text-center min-w-[60px] text-xs">
+                            {format(day, "dd/MM")}
+                          </TableHead>
+                        ))}
+                        <TableHead className="text-center min-w-[80px] bg-muted font-bold">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredTeams.map(team => {
+                        const teamData = entriesByTeam.get(team.id) || new Map();
+                        
+                        return (
+                          <>
+                            {/* Programado row */}
+                            <TableRow key={`${team.id}-programado`}>
+                              <TableCell rowSpan={3} className="sticky left-0 bg-background z-10 font-medium border-b">
+                                {team.name}
+                              </TableCell>
+                              <TableCell className="sticky left-[120px] bg-background z-10 text-xs text-primary font-medium">
+                                Programado
+                              </TableCell>
+                              {allDays.map(day => {
+                                const dateKey = format(day, "yyyy-MM-dd");
+                                const value = teamData.get(dateKey)?.programado || 0;
+                                return (
+                                  <TableCell key={day.toISOString()} className="text-center text-xs">
+                                    {value > 0 ? value.toLocaleString("pt-BR") : "-"}
+                                  </TableCell>
+                                );
+                              })}
+                              <TableCell className="text-center font-bold bg-muted text-xs">
+                                {Array.from(teamData.values()).reduce((sum, d) => sum + (d.programado || 0), 0).toLocaleString("pt-BR")}
+                              </TableCell>
+                            </TableRow>
+                            {/* Executado row */}
+                            <TableRow key={`${team.id}-executado`}>
+                              <TableCell className="sticky left-[120px] bg-background z-10 text-xs text-chart-2 font-medium">
+                                Executado
+                              </TableCell>
+                              {allDays.map(day => {
+                                const dateKey = format(day, "yyyy-MM-dd");
+                                const value = teamData.get(dateKey)?.executado || 0;
+                                return (
+                                  <TableCell key={day.toISOString()} className="text-center text-xs">
+                                    {value > 0 ? value.toLocaleString("pt-BR") : "-"}
+                                  </TableCell>
+                                );
+                              })}
+                              <TableCell className="text-center font-bold bg-muted text-xs">
+                                {Array.from(teamData.values()).reduce((sum, d) => sum + (d.executado || 0), 0).toLocaleString("pt-BR")}
+                              </TableCell>
+                            </TableRow>
+                            {/* Validado EQTL row */}
+                            <TableRow key={`${team.id}-validado`} className="border-b-2">
+                              <TableCell className="sticky left-[120px] bg-background z-10 text-xs text-chart-3 font-medium">
+                                Validado EQTL
+                              </TableCell>
+                              {allDays.map(day => {
+                                const dateKey = format(day, "yyyy-MM-dd");
+                                const value = teamData.get(dateKey)?.validado_eqtl || 0;
+                                return (
+                                  <TableCell key={day.toISOString()} className="text-center text-xs">
+                                    {value > 0 ? value.toLocaleString("pt-BR") : "-"}
+                                  </TableCell>
+                                );
+                              })}
+                              <TableCell className="text-center font-bold bg-muted text-xs">
+                                {Array.from(teamData.values()).reduce((sum, d) => sum + (d.validado_eqtl || 0), 0).toLocaleString("pt-BR")}
+                              </TableCell>
+                            </TableRow>
+                          </>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
+            ) : (
+              <div className="flex h-32 items-center justify-center text-muted-foreground text-sm">
+                Nenhuma equipe encontrada com os filtros selecionados
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
