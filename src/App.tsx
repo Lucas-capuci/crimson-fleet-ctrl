@@ -7,10 +7,9 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
-import Vehicles from "./pages/Vehicles";
+import FleetManagement from "./pages/FleetManagement";
 import Drivers from "./pages/Drivers";
 import Teams from "./pages/Teams";
-import Workshop from "./pages/Workshop";
 import Departures from "./pages/Departures";
 import Schedule from "./pages/Schedule";
 import Admin from "./pages/Admin";
@@ -31,12 +30,11 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-            <Route path="/veiculos" element={<ProtectedRoute><Vehicles /></ProtectedRoute>} />
+            <Route path="/frotas" element={<ProtectedRoute><FleetManagement /></ProtectedRoute>} />
             <Route path="/motoristas" element={<ProtectedRoute><Drivers /></ProtectedRoute>} />
             <Route path="/equipes" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
             <Route path="/escala" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
             <Route path="/saida" element={<ProtectedRoute><Departures /></ProtectedRoute>} />
-            <Route path="/oficina" element={<ProtectedRoute><Workshop /></ProtectedRoute>} />
             <Route path="/producao" element={<ProtectedRoute><Production /></ProtectedRoute>} />
             <Route path="/orcamento" element={<ProtectedRoute><Budget /></ProtectedRoute>} />
             <Route path="/relatorios" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
