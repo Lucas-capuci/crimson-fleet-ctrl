@@ -7,7 +7,6 @@ import {
   X,
   Truck,
   Users2,
-  Building,
   Shield,
   LogOut,
   LogIn,
@@ -33,18 +32,17 @@ interface NavItem {
 const navItems: NavItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, page: "dashboard" },
   { title: "Equipes", url: "/equipes", icon: Users2, page: "teams" },
-  { title: "Veículos", url: "/veiculos", icon: Car, page: "vehicles" },
+  { title: "Gestão de Frotas", url: "/frotas", icon: Car, page: "vehicles" },
   { title: "Escala", url: "/escala", icon: CalendarDays, page: "schedule" },
   { title: "Saída", url: "/saida", icon: LogIn, page: "departures" },
-  { title: "Oficina", url: "/oficina", icon: Building, page: "workshop" },
   { title: "Motoristas", url: "/motoristas", icon: Users, page: "drivers" },
   { title: "Produção", url: "/producao", icon: BarChart3, page: "production" },
   { title: "Orçamento", url: "/orcamento", icon: FileText, page: "budget" as PageName },
   { title: "Relatórios", url: "/relatorios", icon: ClipboardCheck, page: "reports" as PageName, adminOnly: true },
 ];
 
-// Pages allowed for Frotas profile
-const FROTAS_ALLOWED_PAGES: PageName[] = ["vehicles", "workshop"];
+// Pages allowed for Frotas profile (now just vehicles which includes workshop)
+const FROTAS_ALLOWED_PAGES: PageName[] = ["vehicles"];
 
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -60,10 +58,14 @@ export function Sidebar() {
     if (item.adminOnly) {
       return userRole === "admin" || userRole === "gestor" || isProgramacao;
     }
+    // For vehicles page, also allow if user has workshop permission
+    if (item.page === "vehicles") {
+      return canViewPage("vehicles") || canViewPage("workshop");
+    }
     return canViewPage(item.page);
   });
 
-  // If user has Frotas profile, restrict to only vehicles and workshop
+  // If user has Frotas profile, restrict to only fleet management
   if (isFrotasProfile()) {
     visibleNavItems = visibleNavItems.filter((item) => 
       FROTAS_ALLOWED_PAGES.includes(item.page)
