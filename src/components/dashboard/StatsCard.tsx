@@ -44,42 +44,42 @@ export function StatsCard({
     <div
       onClick={onClick}
       className={cn(
-        "rounded-xl p-6 card-hover animate-fade-in",
+        "rounded-xl p-4 sm:p-6 card-hover animate-fade-in touch-target",
         variantStyles[variant],
-        isClickable && "cursor-pointer hover:scale-[1.02] transition-transform"
+        isClickable && "cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-transform"
       )}
     >
-      <div className="flex items-start justify-between">
-        <div className="space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="space-y-1 sm:space-y-2 min-w-0 flex-1">
           <p
             className={cn(
-              "text-sm font-medium",
+              "text-xs sm:text-sm font-medium truncate",
               isColored ? "opacity-90" : "text-muted-foreground"
             )}
           >
             {title}
           </p>
-          <p className="text-3xl font-bold tracking-tight">{value}</p>
+          <p className="text-xl sm:text-3xl font-bold tracking-tight">{value}</p>
           {trend && (
             <p
               className={cn(
-                "text-sm flex items-center gap-1",
+                "text-xs sm:text-sm flex items-center gap-1",
                 isColored ? "opacity-80" : "",
                 !isColored && (trend.isPositive ? "text-success" : "text-destructive")
               )}
             >
               {trend.isPositive ? "↑" : "↓"} {Math.abs(trend.value)}%
-              <span className="opacity-70">vs mês anterior</span>
+              <span className="opacity-70 hidden sm:inline">vs mês anterior</span>
             </p>
           )}
         </div>
         <div
           className={cn(
-            "p-3 rounded-xl",
+            "p-2 sm:p-3 rounded-lg sm:rounded-xl flex-shrink-0",
             iconVariantStyles[variant]
           )}
         >
-          <Icon className="h-6 w-6" />
+          <Icon className="h-4 w-4 sm:h-6 sm:w-6" />
         </div>
       </div>
     </div>

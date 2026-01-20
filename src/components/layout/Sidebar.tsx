@@ -77,13 +77,22 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile toggle button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 p-2 rounded-lg bg-primary text-primary-foreground lg:hidden shadow-lg"
-      >
-        {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-      </button>
+      {/* Mobile Header Bar */}
+      <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-sidebar flex items-center justify-between px-4 lg:hidden shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="p-1.5 rounded-lg bg-sidebar-accent">
+            <Truck className="h-5 w-5 text-sidebar-foreground" />
+          </div>
+          <h1 className="text-lg font-bold text-sidebar-foreground">E-Grid</h1>
+        </div>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="p-2 rounded-lg bg-sidebar-accent text-sidebar-foreground"
+          aria-label="Toggle menu"
+        >
+          {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+      </header>
 
       {/* Overlay for mobile */}
       {isOpen && (
@@ -101,8 +110,8 @@ export function Sidebar() {
         )}
       >
         <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="flex items-center gap-3 px-6 py-6 border-b border-sidebar-border">
+          {/* Logo - Hidden on mobile as it's in header */}
+          <div className="hidden lg:flex items-center gap-3 px-6 py-6 border-b border-sidebar-border">
             <div className="p-2 rounded-xl bg-sidebar-accent">
               <Truck className="h-6 w-6 text-sidebar-foreground" />
             </div>
@@ -113,23 +122,23 @@ export function Sidebar() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-2">
+          <nav className="flex-1 px-3 py-4 lg:py-6 space-y-1 lg:space-y-2 overflow-y-auto mt-16 lg:mt-0">
             {allNavItems.map((item) => (
               <NavLink
                 key={item.url}
                 to={item.url}
                 onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-200 group"
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-200 group active:scale-95"
                 activeClassName="bg-sidebar-accent text-sidebar-foreground font-medium shadow-lg"
               >
-                <item.icon className="h-5 w-5 transition-transform group-hover:scale-110" />
-                <span>{item.title}</span>
+                <item.icon className="h-5 w-5 flex-shrink-0" />
+                <span className="truncate">{item.title}</span>
               </NavLink>
             ))}
           </nav>
 
           {/* Footer */}
-          <div className="px-4 py-4 border-t border-sidebar-border space-y-3">
+          <div className="px-3 py-4 border-t border-sidebar-border space-y-2">
             {user && (
               <div className="text-xs text-sidebar-foreground/70 truncate px-2">
                 {user.email}
@@ -137,6 +146,7 @@ export function Sidebar() {
             )}
             <Button
               variant="ghost"
+              size="sm"
               className="w-full justify-start gap-2 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
               onClick={() => signOut()}
             >

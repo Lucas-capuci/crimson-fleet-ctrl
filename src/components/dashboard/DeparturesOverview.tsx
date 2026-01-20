@@ -521,18 +521,18 @@ export function DeparturesOverview() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <Card className="bg-card border-border">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 p-4 sm:p-6 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
               Taxa de Saída (7 dias)
             </CardTitle>
             <TrendingUp className="h-4 w-4 text-primary" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">{overallPercentage}%</div>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-bold text-foreground">{overallPercentage}%</div>
             <p className="text-xs text-muted-foreground">
               {totalDeparted} de {totalDepartures} registros
             </p>
@@ -540,14 +540,14 @@ export function DeparturesOverview() {
         </Card>
 
         <Card className="bg-card border-border">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 p-4 sm:p-6 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
               Saídas Hoje
             </CardTitle>
             <CheckCircle2 className="h-4 w-4 text-green-500" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-bold text-foreground">
               {todayStats?.departed || 0}/{scheduledTeamsToday}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -557,14 +557,14 @@ export function DeparturesOverview() {
         </Card>
 
         <Card className="bg-card border-border">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 p-4 sm:p-6 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
               Tipos de Equipe Ativos
             </CardTitle>
             <Users className="h-4 w-4 text-primary" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">{avgDelayFormatted.length}</div>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-bold text-foreground">{avgDelayFormatted.length}</div>
             <p className="text-xs text-muted-foreground">com registros esta semana</p>
           </CardContent>
         </Card>
@@ -572,19 +572,19 @@ export function DeparturesOverview() {
 
       {/* Average Delay by Team Type */}
       <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary" />
-            Tempo Médio de Atraso por Tipo (minutos)
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+            <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            <span className="truncate">Tempo Médio de Atraso por Tipo (minutos)</span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
           {avgDelayFormatted.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
               {avgDelayFormatted.map((item) => (
-                <div key={item.type} className="p-4 rounded-lg bg-muted/50 border border-border text-center">
-                  <p className="text-sm text-muted-foreground">{item.label}</p>
-                  <p className="text-xl font-bold text-foreground">{item.avgDelayMinutes} min</p>
+                <div key={item.type} className="p-3 sm:p-4 rounded-lg bg-muted/50 border border-border text-center">
+                  <p className="text-xs sm:text-sm text-muted-foreground truncate">{item.label}</p>
+                  <p className="text-lg sm:text-xl font-bold text-foreground">{item.avgDelayMinutes} min</p>
                 </div>
               ))}
             </div>
@@ -596,9 +596,9 @@ export function DeparturesOverview() {
 
       {/* Daily Percentage with Average Time */}
       <Card className="bg-card border-border">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-primary" />
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             Porcentagem de Saída por Dia
           </CardTitle>
           <ExportButton
@@ -607,27 +607,27 @@ export function DeparturesOverview() {
             columns={dailyCsvColumns}
           />
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
           {dailyPercentages.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               {dailyPercentages.map((day) => (
                 <div 
                   key={day.date} 
-                  className="flex items-center gap-4 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                  className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-4 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors active:bg-muted/70"
                   onClick={() => setSelectedDay(day)}
                 >
-                  <span className="text-sm text-muted-foreground w-20 capitalize">{day.dateFormatted}</span>
-                  <div className="flex-1 bg-muted rounded-full h-3 overflow-hidden">
+                  <span className="text-xs sm:text-sm text-muted-foreground w-16 sm:w-20 capitalize">{day.dateFormatted}</span>
+                  <div className="flex-1 min-w-20 bg-muted rounded-full h-2 sm:h-3 overflow-hidden order-last sm:order-none w-full sm:w-auto mt-1 sm:mt-0">
                     <div
                       className="h-full bg-primary transition-all duration-300"
                       style={{ width: `${day.percentage}%` }}
                     />
                   </div>
-                  <span className="text-sm font-medium text-foreground w-12 text-right">{day.percentage}%</span>
-                  <span className="text-sm font-medium text-primary w-16 text-center">
+                  <span className="text-xs sm:text-sm font-medium text-foreground w-10 sm:w-12 text-right">{day.percentage}%</span>
+                  <span className="text-xs sm:text-sm font-medium text-primary w-14 sm:w-16 text-center">
                     {day.avgDelayMinutes !== null ? `${day.avgDelayMinutes} min` : "--"}
                   </span>
-                  <span className="text-xs text-muted-foreground w-14">({day.departed}/{day.total})</span>
+                  <span className="text-xs text-muted-foreground w-12 sm:w-14">({day.departed}/{day.total})</span>
                 </div>
               ))}
             </div>
@@ -639,31 +639,31 @@ export function DeparturesOverview() {
 
       {/* Team Rankings by Departure Time */}
       <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-primary" />
-            Ranking de Equipes por Tempo de Saída - Hoje
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+            <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            <span className="truncate">Ranking de Equipes - Hoje</span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
           {teamRankings.best.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               {/* Best Teams */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 mb-4">
+              <div className="space-y-2 sm:space-y-3">
+                <div className="flex items-center gap-2 mb-3 sm:mb-4">
                   <Trophy className="h-4 w-4 text-green-500" />
-                  <h4 className="font-medium text-foreground">Melhores Tempos</h4>
+                  <h4 className="font-medium text-foreground text-sm sm:text-base">Melhores Tempos</h4>
                 </div>
                 {teamRankings.best.map((team, index) => (
                   <div 
                     key={team.id} 
-                    className="flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/20"
+                    className="flex items-center justify-between p-2 sm:p-3 rounded-lg bg-green-500/10 border border-green-500/20"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg font-bold text-green-600 w-6">{index + 1}º</span>
-                      <span className="text-sm font-medium text-foreground">{team.name}</span>
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                      <span className="text-base sm:text-lg font-bold text-green-600 w-5 sm:w-6">{index + 1}º</span>
+                      <span className="text-xs sm:text-sm font-medium text-foreground truncate">{team.name}</span>
                     </div>
-                    <span className="text-sm font-semibold text-green-600">
+                    <span className="text-xs sm:text-sm font-semibold text-green-600 flex-shrink-0">
                       {team.delayMinutes >= 0 ? `+${team.delayMinutes}` : team.delayMinutes} min
                     </span>
                   </div>
@@ -671,21 +671,21 @@ export function DeparturesOverview() {
               </div>
 
               {/* Worst Teams */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 mb-4">
+              <div className="space-y-2 sm:space-y-3">
+                <div className="flex items-center gap-2 mb-3 sm:mb-4">
                   <AlertTriangle className="h-4 w-4 text-red-500" />
-                  <h4 className="font-medium text-foreground">Piores Tempos</h4>
+                  <h4 className="font-medium text-foreground text-sm sm:text-base">Piores Tempos</h4>
                 </div>
                 {teamRankings.worst.map((team, index) => (
                   <div 
                     key={team.id} 
-                    className="flex items-center justify-between p-3 rounded-lg bg-red-500/10 border border-red-500/20"
+                    className="flex items-center justify-between p-2 sm:p-3 rounded-lg bg-red-500/10 border border-red-500/20"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg font-bold text-red-600 w-6">{index + 1}º</span>
-                      <span className="text-sm font-medium text-foreground">{team.name}</span>
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                      <span className="text-base sm:text-lg font-bold text-red-600 w-5 sm:w-6">{index + 1}º</span>
+                      <span className="text-xs sm:text-sm font-medium text-foreground truncate">{team.name}</span>
                     </div>
-                    <span className="text-sm font-semibold text-red-600">
+                    <span className="text-xs sm:text-sm font-semibold text-red-600 flex-shrink-0">
                       {team.delayMinutes >= 0 ? `+${team.delayMinutes}` : team.delayMinutes} min
                     </span>
                   </div>
@@ -700,13 +700,13 @@ export function DeparturesOverview() {
 
       {/* Supervisor Rankings by Departure Time - Bar Chart */}
       <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            Ranking de Supervisores por Tempo de Saída - Hoje
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+            <Users className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            <span className="truncate">Ranking de Supervisores - Hoje</span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
           {(() => {
             // Get all supervisors sorted by delay for the bar chart
             const todayDepartures = weeklyDepartures?.filter(dep => dep.date === today) || [];
@@ -729,7 +729,8 @@ export function DeparturesOverview() {
             const chartData = Object.entries(supervisorDelays)
               .map(([id, data]) => ({
                 id,
-                name: data.name,
+                name: data.name.split(' ')[0], // Shortened name for mobile
+                fullName: data.name,
                 avgDelayMinutes: Math.round(data.totalDelay / data.count),
                 teamsCount: data.count,
               }))
@@ -743,12 +744,12 @@ export function DeparturesOverview() {
             const maxDelay = Math.max(...chartData.map(d => d.avgDelayMinutes), TARGET_MINUTES + 10);
 
             return (
-              <div className="h-[400px] w-full">
+              <div className="h-[300px] sm:h-[400px] w-full -mx-2 sm:mx-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={chartData}
                     layout="vertical"
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    margin={{ top: 20, right: 40, left: 10, bottom: 5 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="hsl(var(--border))" />
                     <XAxis 
@@ -761,21 +762,23 @@ export function DeparturesOverview() {
                     <YAxis 
                       type="category" 
                       dataKey="name" 
-                      width={120}
+                      width={80}
                       stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
+                      fontSize={11}
                       tick={{ fill: 'hsl(var(--foreground))' }}
+                      tickFormatter={(value) => value.length > 10 ? value.substring(0, 10) + '...' : value}
                     />
                     <Tooltip 
                       formatter={(value: number, name: string, props: any) => [
                         `${value} min (${props.payload.teamsCount} equipe${props.payload.teamsCount > 1 ? 's' : ''})`,
-                        'Tempo Médio'
+                        props.payload.fullName || 'Tempo Médio'
                       ]}
                       contentStyle={{
                         backgroundColor: 'hsl(var(--card))',
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '8px',
-                        color: 'hsl(var(--foreground))'
+                        color: 'hsl(var(--foreground))',
+                        fontSize: '12px'
                       }}
                     />
                     <ReferenceLine 
@@ -820,19 +823,19 @@ export function DeparturesOverview() {
 
       {/* Today's Departures List */}
       <Card className="animate-fade-in">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-lg font-semibold">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-4 sm:p-6 pb-2 sm:pb-2">
+          <CardTitle className="text-base sm:text-lg font-semibold">
             Saídas de Hoje - {format(new Date(), "dd/MM/yyyy", { locale: ptBR })}
           </CardTitle>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {todayStats && todayStats.total > 0 && (
-              <div className="flex gap-3 text-sm">
+              <div className="flex gap-2 sm:gap-3 text-xs sm:text-sm">
                 <span className="flex items-center gap-1 text-green-600">
-                  <CheckCircle2 className="h-4 w-4" />
+                  <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4" />
                   {todayStats.departed}
                 </span>
                 <span className="flex items-center gap-1 text-red-600">
-                  <XCircle className="h-4 w-4" />
+                  <XCircle className="h-3 w-3 sm:h-4 sm:w-4" />
                   {todayStats.total - todayStats.departed}
                 </span>
               </div>
@@ -844,47 +847,54 @@ export function DeparturesOverview() {
             />
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
           {isLoading ? (
             <p className="text-muted-foreground">Carregando...</p>
           ) : departures.length === 0 ? (
             <p className="text-muted-foreground text-center py-4">Nenhum lançamento registrado hoje.</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Equipe</TableHead>
-                  <TableHead>Supervisor</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Horário/Motivo</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {departures.map((dep) => (
-                  <TableRow key={dep.id}>
-                    <TableCell className="font-medium">{dep.teams?.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{dep.supervisorName}</TableCell>
-                    <TableCell>
-                      {dep.departed ? (
-                        <Badge variant="default" className="bg-green-600 text-xs">Saiu</Badge>
-                      ) : (
-                        <Badge variant="destructive" className="text-xs">Não Saiu</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {dep.departed ? (
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {dep.departure_time}
-                        </span>
-                      ) : (
-                        <span className="truncate max-w-32">{dep.no_departure_reason || "-"}</span>
-                      )}
-                    </TableCell>
+            <div className="table-responsive">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs sm:text-sm">Equipe</TableHead>
+                    <TableHead className="text-xs sm:text-sm hidden sm:table-cell">Supervisor</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Status</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Horário/Motivo</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {departures.map((dep) => (
+                    <TableRow key={dep.id}>
+                      <TableCell className="font-medium text-xs sm:text-sm py-2 sm:py-4">
+                        <div>
+                          <span>{dep.teams?.name}</span>
+                          <span className="block sm:hidden text-xs text-muted-foreground">{dep.supervisorName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs sm:text-sm hidden sm:table-cell">{dep.supervisorName}</TableCell>
+                      <TableCell className="py-2 sm:py-4">
+                        {dep.departed ? (
+                          <Badge variant="default" className="bg-green-600 text-[10px] sm:text-xs">Saiu</Badge>
+                        ) : (
+                          <Badge variant="destructive" className="text-[10px] sm:text-xs">Não Saiu</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs sm:text-sm text-muted-foreground py-2 sm:py-4">
+                        {dep.departed ? (
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {dep.departure_time}
+                          </span>
+                        ) : (
+                          <span className="truncate max-w-20 sm:max-w-32 block">{dep.no_departure_reason || "-"}</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
