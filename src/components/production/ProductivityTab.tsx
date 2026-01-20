@@ -60,7 +60,7 @@ const ENTRY_TYPE_LABELS: Record<string, string> = {
 // Custom colors for productivity chart
 const PRODUCTIVITY_COLORS = {
   programado: "#1e3a5f",    // Dark blue
-  executado: "#1a5235",     // Dark green
+  executado: "#4ade80",     // Light green
   validado_eqtl: "#c55a11", // Dark orange
 };
 
