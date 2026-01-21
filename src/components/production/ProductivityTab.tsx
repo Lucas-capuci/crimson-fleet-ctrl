@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, startOfMonth, endOfMonth, getDaysInMonth, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, BarChart3, Table as TableIcon, Users, UserCheck, Filter } from "lucide-react";
+import { Plus, BarChart3, Table as TableIcon, Users, UserCheck, Filter, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Legend, CartesianGrid, Cell, LabelList } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Legend, CartesianGrid, Cell, LabelList, LineChart, Line } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -344,6 +344,34 @@ export function ProductivityTab() {
 
   // State for view mode
   const [viewMode, setViewMode] = useState<"table" | "chart">("table");
+  const [chartType, setChartType] = useState<"bars" | "lines">("bars");
+
+  // Prepare line chart data - daily totals across all teams
+  const lineChartData = useMemo(() => {
+    const dailyTotals = new Map<string, { date: string; programado: number; executado: number; validado_eqtl: number }>();
+    
+    // Initialize all days
+    allDays.forEach(day => {
+      const dateKey = format(day, "yyyy-MM-dd");
+      dailyTotals.set(dateKey, {
+        date: format(day, "dd/MM"),
+        programado: 0,
+        executado: 0,
+        validado_eqtl: 0,
+      });
+    });
+
+    // Sum values for each day
+    filteredEntries.forEach(entry => {
+      const dayData = dailyTotals.get(entry.date);
+      if (dayData && (entry.entry_type === 'programado' || entry.entry_type === 'executado' || entry.entry_type === 'validado_eqtl')) {
+        (dayData as Record<string, number | string>)[entry.entry_type] = 
+          ((dayData as Record<string, number | string>)[entry.entry_type] as number || 0) + entry.value;
+      }
+    });
+
+    return Array.from(dailyTotals.values());
+  }, [allDays, filteredEntries]);
 
   return (
     <div className="space-y-4">
@@ -438,6 +466,22 @@ export function ProductivityTab() {
             </TabsTrigger>
           </TabsList>
         </Tabs>
+
+        {/* Chart Type Toggle - Only visible when chart view is active */}
+        {viewMode === "chart" && (
+          <Tabs value={chartType} onValueChange={(v) => setChartType(v as "bars" | "lines")} className="hidden sm:block">
+            <TabsList className="h-9">
+              <TabsTrigger value="bars" className="px-3">
+                <BarChart3 className="h-4 w-4 mr-1" />
+                Barras
+              </TabsTrigger>
+              <TabsTrigger value="lines" className="px-3">
+                <TrendingUp className="h-4 w-4 mr-1" />
+                Linhas
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
 
         {/* Add Entry Button */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -536,7 +580,7 @@ export function ProductivityTab() {
       </div>
 
       {/* Mobile view toggle */}
-      <div className="flex sm:hidden gap-2 mb-4">
+      <div className="flex sm:hidden gap-2 mb-4 flex-wrap">
         <Button
           variant={viewMode === "table" ? "default" : "outline"}
           size="sm"
@@ -555,6 +599,28 @@ export function ProductivityTab() {
           <BarChart3 className="h-4 w-4 mr-1" />
           Gráfico
         </Button>
+        {viewMode === "chart" && (
+          <>
+            <Button
+              variant={chartType === "bars" ? "default" : "outline"}
+              size="sm"
+              className="flex-1"
+              onClick={() => setChartType("bars")}
+            >
+              <BarChart3 className="h-4 w-4 mr-1" />
+              Barras
+            </Button>
+            <Button
+              variant={chartType === "lines" ? "default" : "outline"}
+              size="sm"
+              className="flex-1"
+              onClick={() => setChartType("lines")}
+            >
+              <TrendingUp className="h-4 w-4 mr-1" />
+              Linhas
+            </Button>
+          </>
+        )}
       </div>
 
       {/* Chart View */}
@@ -562,92 +628,188 @@ export function ProductivityTab() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-              <BarChart3 className="h-5 w-5" />
-              Comparativo de Produtividade - {format(monthStart, "MMMM yyyy", { locale: ptBR })}
+              {chartType === "bars" ? <BarChart3 className="h-5 w-5" /> : <TrendingUp className="h-5 w-5" />}
+              {chartType === "bars" 
+                ? `Comparativo de Produtividade - ${format(monthStart, "MMMM yyyy", { locale: ptBR })}`
+                : `Evolução Diária de Produtividade - ${format(monthStart, "MMMM yyyy", { locale: ptBR })}`
+              }
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {chartData.length > 0 ? (
-              <div style={{ height: Math.max(300, chartData.length * 80) }}>
-                <ChartContainer config={chartConfig} className="h-full w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart 
-                      data={chartData} 
-                      layout="vertical" 
-                      margin={{ left: 0, right: 20, top: 20, bottom: 20 }}
-                      barCategoryGap="20%"
-                    >
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
-                      <XAxis 
-                        type="number" 
-                        hide={true}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        width={100}
-                        tick={{ fontSize: 11, fontWeight: 500 }}
-                        tickFormatter={(value) => value.length > 12 ? `${value.substring(0, 10)}...` : value}
-                      />
-                      <ChartTooltip 
-                        content={<ChartTooltipContent />} 
-                        cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }}
-                      />
-                      <Legend 
-                        wrapperStyle={{ paddingTop: 20 }}
-                        iconType="square"
-                        iconSize={12}
-                      />
-                      <Bar 
-                        dataKey="programado" 
-                        name="Programado" 
-                        fill={PRODUCTIVITY_COLORS.programado}
-                        radius={[0, 4, 4, 0]} 
-                        barSize={18}
+            {chartType === "bars" ? (
+              // Bar Chart - By Team
+              chartData.length > 0 ? (
+                <div style={{ height: Math.max(300, chartData.length * 80) }}>
+                  <ChartContainer config={chartConfig} className="h-full w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart 
+                        data={chartData} 
+                        layout="vertical" 
+                        margin={{ left: 0, right: 20, top: 20, bottom: 20 }}
+                        barCategoryGap="20%"
                       >
-                        <LabelList 
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
+                        <XAxis 
+                          type="number" 
+                          hide={true}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          width={100}
+                          tick={{ fontSize: 11, fontWeight: 500 }}
+                          tickFormatter={(value) => value.length > 12 ? `${value.substring(0, 10)}...` : value}
+                        />
+                        <ChartTooltip 
+                          content={<ChartTooltipContent />} 
+                          cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }}
+                        />
+                        <Legend 
+                          wrapperStyle={{ paddingTop: 20 }}
+                          iconType="square"
+                          iconSize={12}
+                        />
+                        <Bar 
                           dataKey="programado" 
-                          position="right" 
-                          formatter={(value: number) => value > 0 ? value.toLocaleString("pt-BR") : ""}
-                          style={{ fontSize: 10, fontWeight: 500, fill: PRODUCTIVITY_COLORS.programado }}
-                        />
-                      </Bar>
-                      <Bar 
-                        dataKey="executado" 
-                        name="Executado" 
-                        fill={PRODUCTIVITY_COLORS.executado}
-                        radius={[0, 4, 4, 0]} 
-                        barSize={18}
-                      >
-                        <LabelList 
+                          name="Programado" 
+                          fill={PRODUCTIVITY_COLORS.programado}
+                          radius={[0, 4, 4, 0]} 
+                          barSize={18}
+                        >
+                          <LabelList 
+                            dataKey="programado" 
+                            position="right" 
+                            formatter={(value: number) => value > 0 ? value.toLocaleString("pt-BR") : ""}
+                            style={{ fontSize: 10, fontWeight: 500, fill: PRODUCTIVITY_COLORS.programado }}
+                          />
+                        </Bar>
+                        <Bar 
                           dataKey="executado" 
-                          position="right" 
-                          formatter={(value: number) => value > 0 ? value.toLocaleString("pt-BR") : ""}
-                          style={{ fontSize: 10, fontWeight: 500, fill: PRODUCTIVITY_COLORS.executado }}
-                        />
-                      </Bar>
-                      <Bar 
-                        dataKey="validado_eqtl" 
-                        name="Validado EQTL" 
-                        fill={PRODUCTIVITY_COLORS.validado_eqtl}
-                        radius={[0, 4, 4, 0]} 
-                        barSize={18}
-                      >
-                        <LabelList 
+                          name="Executado" 
+                          fill={PRODUCTIVITY_COLORS.executado}
+                          radius={[0, 4, 4, 0]} 
+                          barSize={18}
+                        >
+                          <LabelList 
+                            dataKey="executado" 
+                            position="right" 
+                            formatter={(value: number) => value > 0 ? value.toLocaleString("pt-BR") : ""}
+                            style={{ fontSize: 10, fontWeight: 500, fill: PRODUCTIVITY_COLORS.executado }}
+                          />
+                        </Bar>
+                        <Bar 
                           dataKey="validado_eqtl" 
-                          position="right" 
-                          formatter={(value: number) => value > 0 ? value.toLocaleString("pt-BR") : ""}
-                          style={{ fontSize: 10, fontWeight: 500, fill: PRODUCTIVITY_COLORS.validado_eqtl }}
-                        />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </div>
+                          name="Validado EQTL" 
+                          fill={PRODUCTIVITY_COLORS.validado_eqtl}
+                          radius={[0, 4, 4, 0]} 
+                          barSize={18}
+                        >
+                          <LabelList 
+                            dataKey="validado_eqtl" 
+                            position="right" 
+                            formatter={(value: number) => value > 0 ? value.toLocaleString("pt-BR") : ""}
+                            style={{ fontSize: 10, fontWeight: 500, fill: PRODUCTIVITY_COLORS.validado_eqtl }}
+                          />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                </div>
+              ) : (
+                <div className="flex h-64 items-center justify-center text-muted-foreground">
+                  Nenhum dado disponível para o período selecionado
+                </div>
+              )
             ) : (
-              <div className="flex h-64 items-center justify-center text-muted-foreground">
-                Nenhum dado disponível para o período selecionado
-              </div>
+              // Line Chart - Daily Evolution
+              lineChartData.some(d => d.programado > 0 || d.executado > 0 || d.validado_eqtl > 0) ? (
+                <div style={{ height: 400 }}>
+                  <ChartContainer config={chartConfig} className="h-full w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart 
+                        data={lineChartData} 
+                        margin={{ left: 10, right: 30, top: 20, bottom: 20 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis 
+                          dataKey="date"
+                          tick={{ fontSize: 10 }}
+                          interval="preserveStartEnd"
+                          tickMargin={8}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 11 }}
+                          tickFormatter={(value) => value.toLocaleString("pt-BR")}
+                        />
+                        <ChartTooltip 
+                          content={<ChartTooltipContent />} 
+                          cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeDasharray: '3 3' }}
+                        />
+                        <Legend 
+                          wrapperStyle={{ paddingTop: 20 }}
+                          iconType="line"
+                          iconSize={16}
+                        />
+                        <Line 
+                          type="monotone"
+                          dataKey="programado" 
+                          name="Programado" 
+                          stroke={PRODUCTIVITY_COLORS.programado}
+                          strokeWidth={2}
+                          dot={{ r: 3, fill: PRODUCTIVITY_COLORS.programado }}
+                          activeDot={{ r: 5 }}
+                        >
+                          <LabelList 
+                            dataKey="programado" 
+                            position="top"
+                            offset={8}
+                            formatter={(value: number) => value > 0 ? value.toLocaleString("pt-BR") : ""}
+                            style={{ fontSize: 9, fontWeight: 500, fill: PRODUCTIVITY_COLORS.programado }}
+                          />
+                        </Line>
+                        <Line 
+                          type="monotone"
+                          dataKey="executado" 
+                          name="Executado" 
+                          stroke={PRODUCTIVITY_COLORS.executado}
+                          strokeWidth={2}
+                          dot={{ r: 3, fill: PRODUCTIVITY_COLORS.executado }}
+                          activeDot={{ r: 5 }}
+                        >
+                          <LabelList 
+                            dataKey="executado" 
+                            position="top"
+                            offset={8}
+                            formatter={(value: number) => value > 0 ? value.toLocaleString("pt-BR") : ""}
+                            style={{ fontSize: 9, fontWeight: 500, fill: PRODUCTIVITY_COLORS.executado }}
+                          />
+                        </Line>
+                        <Line 
+                          type="monotone"
+                          dataKey="validado_eqtl" 
+                          name="Validado EQTL" 
+                          stroke={PRODUCTIVITY_COLORS.validado_eqtl}
+                          strokeWidth={2}
+                          dot={{ r: 3, fill: PRODUCTIVITY_COLORS.validado_eqtl }}
+                          activeDot={{ r: 5 }}
+                        >
+                          <LabelList 
+                            dataKey="validado_eqtl" 
+                            position="top"
+                            offset={8}
+                            formatter={(value: number) => value > 0 ? value.toLocaleString("pt-BR") : ""}
+                            style={{ fontSize: 9, fontWeight: 500, fill: PRODUCTIVITY_COLORS.validado_eqtl }}
+                          />
+                        </Line>
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                </div>
+              ) : (
+                <div className="flex h-64 items-center justify-center text-muted-foreground">
+                  Nenhum dado disponível para o período selecionado
+                </div>
+              )
             )}
           </CardContent>
         </Card>
