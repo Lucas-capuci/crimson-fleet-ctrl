@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { format, startOfMonth, endOfMonth, getDaysInMonth, eachDayOfInterval } from "date-fns";
+import { format, startOfMonth, endOfMonth, getDaysInMonth, eachDayOfInterval, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, BarChart3, Table as TableIcon, Users, UserCheck, TrendingUp, Target, CheckCircle2, Calculator, Percent } from "lucide-react";
+import { Plus, BarChart3, Table as TableIcon, Users, UserCheck, TrendingUp, Target, CheckCircle2, Calculator, Percent, CalendarIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -87,8 +87,10 @@ export function ProductivityTab() {
   const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
   
-  const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), "yyyy-MM"));
-  const [selectedDayFilter, setSelectedDayFilter] = useState("all");
+  // Date range filters - default to current month
+  const [startDate, setStartDate] = useState<Date>(() => startOfMonth(new Date()));
+  const [endDate, setEndDate] = useState<Date>(() => endOfMonth(new Date()));
+  
   const [selectedTeamFilter, setSelectedTeamFilter] = useState("all");
   // Force poda filter - this module is specifically for poda teams
   const selectedTeamTypeFilter = "poda";
@@ -105,26 +107,11 @@ export function ProductivityTab() {
     validado_eqtl: "",
   });
 
-  // Parse selected month
-  const [year, month] = selectedMonth.split("-").map(Number);
-  const monthStart = startOfMonth(new Date(year, month - 1));
-  const monthEnd = endOfMonth(monthStart);
-  const daysInMonth = getDaysInMonth(monthStart);
-  const allDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
-
-  // Month options (last 12 months)
-  const monthOptions = useMemo(() => {
-    const options = [];
-    const today = new Date();
-    for (let i = 0; i < 12; i++) {
-      const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      options.push({
-        value: format(date, "yyyy-MM"),
-        label: format(date, "MMMM yyyy", { locale: ptBR }),
-      });
-    }
-    return options;
-  }, []);
+  // All days in the selected range
+  const allDays = useMemo(() => {
+    if (!startDate || !endDate) return [];
+    return eachDayOfInterval({ start: startDate, end: endDate });
+  }, [startDate, endDate]);
 
   // Fetch teams
   const { data: teams = [] } = useQuery({
@@ -188,7 +175,7 @@ export function ProductivityTab() {
 
   // Fetch productivity entries
   const { data: entries = [], isLoading } = useQuery({
-    queryKey: ["productivity_entries", selectedMonth, selectedTeamFilter, selectedTeamTypeFilter, selectedSupervisorFilter, selectedDayFilter],
+    queryKey: ["productivity_entries", format(startDate, "yyyy-MM-dd"), format(endDate, "yyyy-MM-dd"), selectedTeamFilter, selectedTeamTypeFilter, selectedSupervisorFilter],
     queryFn: async () => {
       let query = supabase
         .from("productivity_entries")
@@ -201,8 +188,8 @@ export function ProductivityTab() {
           created_by,
           teams (name, type)
         `)
-        .gte("date", format(monthStart, "yyyy-MM-dd"))
-        .lte("date", format(monthEnd, "yyyy-MM-dd"));
+        .gte("date", format(startDate, "yyyy-MM-dd"))
+        .lte("date", format(endDate, "yyyy-MM-dd"));
 
       if (selectedTeamFilter !== "all") {
         query = query.eq("team_id", selectedTeamFilter);
@@ -210,14 +197,11 @@ export function ProductivityTab() {
         query = query.in("team_id", supervisorTeamIds);
       }
 
-      if (selectedDayFilter !== "all") {
-        query = query.eq("date", selectedDayFilter);
-      }
-
       const { data, error } = await query;
       if (error) throw error;
       return data as unknown as ProductivityEntry[];
     },
+    enabled: !!startDate && !!endDate,
   });
 
   // Filter entries by team type (only poda teams)
@@ -498,18 +482,49 @@ export function ProductivityTab() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
-        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {monthOptions.map(option => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Start Date Filter */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn("w-[140px] justify-start text-left font-normal", !startDate && "text-muted-foreground")}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {startDate ? format(startDate, "dd/MM/yyyy") : "Data Inicial"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={startDate}
+              onSelect={(date) => date && setStartDate(date)}
+              initialFocus
+              className="pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
+
+        {/* End Date Filter */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn("w-[140px] justify-start text-left font-normal", !endDate && "text-muted-foreground")}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {endDate ? format(endDate, "dd/MM/yyyy") : "Data Final"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={endDate}
+              onSelect={(date) => date && setEndDate(date)}
+              initialFocus
+              className="pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
 
         {isAdmin && (
           <Select value={selectedSupervisorFilter} onValueChange={setSelectedSupervisorFilter}>
@@ -528,7 +543,6 @@ export function ProductivityTab() {
           </Select>
         )}
 
-
         <Select value={selectedTeamFilter} onValueChange={setSelectedTeamFilter}>
           <SelectTrigger className="w-[160px]">
             <Users className="mr-2 h-4 w-4" />
@@ -539,20 +553,6 @@ export function ProductivityTab() {
             {teams.map(team => (
               <SelectItem key={team.id} value={team.id}>
                 {team.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={selectedDayFilter} onValueChange={setSelectedDayFilter}>
-          <SelectTrigger className="w-[130px]">
-            <SelectValue placeholder="Dia" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os Dias</SelectItem>
-            {allDays.map(day => (
-              <SelectItem key={day.toISOString()} value={format(day, "yyyy-MM-dd")}>
-                {format(day, "dd/MM")}
               </SelectItem>
             ))}
           </SelectContent>
@@ -737,8 +737,8 @@ export function ProductivityTab() {
             <CardTitle className="text-base sm:text-lg flex items-center gap-2">
               {chartType === "bars" ? <BarChart3 className="h-5 w-5" /> : <TrendingUp className="h-5 w-5" />}
               {chartType === "bars" 
-                ? `Comparativo de Produtividade - ${format(monthStart, "MMMM yyyy", { locale: ptBR })}`
-                : `Evolução Diária de Produtividade - ${format(monthStart, "MMMM yyyy", { locale: ptBR })}`
+                ? `Comparativo de Produtividade - ${format(startDate, "dd/MM/yyyy")} a ${format(endDate, "dd/MM/yyyy")}`
+                : `Evolução Diária de Produtividade - ${format(startDate, "dd/MM/yyyy")} a ${format(endDate, "dd/MM/yyyy")}`
               }
             </CardTitle>
           </CardHeader>
@@ -942,7 +942,7 @@ export function ProductivityTab() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base sm:text-lg flex items-center gap-2">
               <TableIcon className="h-5 w-5" />
-              Acompanhamento Mensal - {format(monthStart, "MMMM yyyy", { locale: ptBR })}
+              Acompanhamento - {format(startDate, "dd/MM/yyyy")} a {format(endDate, "dd/MM/yyyy")}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0 sm:p-6">
