@@ -580,8 +580,7 @@ export function ProductivityTab() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
                       <XAxis 
                         type="number" 
-                        tick={{ fontSize: 11 }} 
-                        tickFormatter={(value) => value.toLocaleString("pt-BR")}
+                        hide={true}
                       />
                       <YAxis
                         type="category"
