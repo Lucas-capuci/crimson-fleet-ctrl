@@ -45,8 +45,9 @@ import {
 import { 
   Plus, Search, Edit, Trash2, Car, Wrench, Clock, CheckCircle, 
   Calendar, LogOut, ChevronsUpDown, Check, Building, User, Phone,
-  Upload, X, FileText, Image, Video, Download, Eye, Paperclip
+  Upload, X, FileText, Image, Video, Download, Eye, Paperclip, BarChart3
 } from "lucide-react";
+import { FleetIndicatorsTab } from "@/components/fleet/FleetIndicatorsTab";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn, formatDateTime } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
@@ -1140,6 +1141,10 @@ const FleetManagement = () => {
           <TabsTrigger value="drivers" className="gap-2">
             <User className="h-4 w-4" />
             Motoristas
+          </TabsTrigger>
+          <TabsTrigger value="indicators" className="gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Indicadores de Frotas
           </TabsTrigger>
         </TabsList>
 
@@ -2261,6 +2266,11 @@ const FleetManagement = () => {
               </div>
             )}
           </div>
+        </TabsContent>
+
+        {/* ==================== INDICATORS TAB ==================== */}
+        <TabsContent value="indicators">
+          <FleetIndicatorsTab />
         </TabsContent>
       </Tabs>
     </MainLayout>
