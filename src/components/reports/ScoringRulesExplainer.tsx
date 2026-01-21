@@ -1,0 +1,318 @@
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { 
+  HelpCircle, 
+  Target, 
+  Calculator, 
+  TrendingUp, 
+  TrendingDown,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  Sparkles,
+  ChevronDown,
+  ChevronUp
+} from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+
+interface ExampleScenario {
+  name: string;
+  reports: { name: string; status: "on_time" | "late" | "error" }[];
+  configs: { name: string; onTime: number; late: number; error: number }[];
+}
+
+const EXAMPLE_SCENARIOS: ExampleScenario[] = [
+  {
+    name: "Dia Perfeito",
+    reports: [
+      { name: "Relatório A", status: "on_time" },
+      { name: "Relatório B", status: "on_time" },
+      { name: "Relatório C", status: "on_time" },
+    ],
+    configs: [
+      { name: "Relatório A", onTime: 20, late: -10, error: -40 },
+      { name: "Relatório B", onTime: 15, late: -5, error: -30 },
+      { name: "Relatório C", onTime: 25, late: -15, error: -50 },
+    ],
+  },
+  {
+    name: "Dia Misto",
+    reports: [
+      { name: "Relatório A", status: "on_time" },
+      { name: "Relatório B", status: "late" },
+      { name: "Relatório C", status: "error" },
+    ],
+    configs: [
+      { name: "Relatório A", onTime: 20, late: -10, error: -40 },
+      { name: "Relatório B", onTime: 15, late: -5, error: -30 },
+      { name: "Relatório C", onTime: 25, late: -15, error: -50 },
+    ],
+  },
+  {
+    name: "Dia Difícil",
+    reports: [
+      { name: "Relatório A", status: "error" },
+      { name: "Relatório B", status: "error" },
+      { name: "Relatório C", status: "late" },
+    ],
+    configs: [
+      { name: "Relatório A", onTime: 20, late: -10, error: -40 },
+      { name: "Relatório B", onTime: 15, late: -5, error: -30 },
+      { name: "Relatório C", onTime: 25, late: -15, error: -50 },
+    ],
+  },
+];
+
+function calculateNormalizedScore(
+  reports: ExampleScenario["reports"],
+  configs: ExampleScenario["configs"]
+) {
+  let sumObtained = 0;
+  let sumMax = 0;
+  let sumMin = 0;
+
+  reports.forEach((report, index) => {
+    const config = configs[index];
+    sumMax += config.onTime;
+    sumMin += config.error;
+
+    if (report.status === "on_time") {
+      sumObtained += config.onTime;
+    } else if (report.status === "late") {
+      sumObtained += config.late;
+    } else {
+      sumObtained += config.error;
+    }
+  });
+
+  const range = sumMax - sumMin;
+  const performanceIndex = range !== 0 ? (sumObtained - sumMin) / range : 0.5;
+  const dailyScore = performanceIndex * 40 - 20;
+
+  return {
+    sumObtained,
+    sumMax,
+    sumMin,
+    performanceIndex,
+    dailyScore: Math.round(dailyScore * 100) / 100,
+  };
+}
+
+export function ScoringRulesExplainer() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedScenario, setSelectedScenario] = useState(0);
+
+  const scenario = EXAMPLE_SCENARIOS[selectedScenario];
+  const calculation = calculateNormalizedScore(scenario.reports, scenario.configs);
+
+  const getStatusIcon = (status: "on_time" | "late" | "error") => {
+    switch (status) {
+      case "on_time":
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      case "late":
+        return <Clock className="h-4 w-4 text-yellow-500" />;
+      case "error":
+        return <XCircle className="h-4 w-4 text-red-500" />;
+    }
+  };
+
+  const getStatusLabel = (status: "on_time" | "late" | "error") => {
+    switch (status) {
+      case "on_time":
+        return "No horário";
+      case "late":
+        return "Atrasado";
+      case "error":
+        return "Erro/Esqueceu";
+    }
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 10) return "text-green-500";
+    if (score >= 0) return "text-green-400";
+    if (score >= -10) return "text-yellow-500";
+    return "text-red-500";
+  };
+
+  const progressValue = ((calculation.dailyScore + 20) / 40) * 100;
+
+  return (
+    <Card className="border-dashed border-2 border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <CardHeader className="pb-2">
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" className="w-full justify-between p-0 h-auto hover:bg-transparent">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Como funciona a pontuação?
+              </CardTitle>
+              {isOpen ? (
+                <ChevronUp className="h-5 w-5 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-5 w-5 text-muted-foreground" />
+              )}
+            </Button>
+          </CollapsibleTrigger>
+        </CardHeader>
+
+        <CollapsibleContent>
+          <CardContent className="space-y-6">
+            {/* Visual Score Gauge */}
+            <div className="text-center p-4 bg-card rounded-lg border">
+              <div className="flex items-center justify-center gap-3 mb-3">
+                <div className="flex items-center gap-1">
+                  <TrendingDown className="h-5 w-5 text-red-500" />
+                  <span className="font-bold text-red-500">-20</span>
+                </div>
+                <div className="flex-1 max-w-xs">
+                  <div className="relative">
+                    <Progress value={50} className="h-4 bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 opacity-30" />
+                    <div 
+                      className="absolute top-0 h-4 w-1 bg-foreground rounded"
+                      style={{ left: `${progressValue}%`, transform: 'translateX(-50%)' }}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="font-bold text-green-500">+20</span>
+                  <TrendingUp className="h-5 w-5 text-green-500" />
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Sua pontuação diária sempre estará entre <strong>-20</strong> e <strong>+20</strong>
+              </p>
+            </div>
+
+            {/* Key Rules */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="h-5 w-5 text-green-500" />
+                  <span className="font-semibold text-green-700 dark:text-green-400">Meta</span>
+                </div>
+                <p className="text-sm">
+                  100% no horário = <strong>+20 pts</strong>
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="h-5 w-5 text-yellow-500" />
+                  <span className="font-semibold text-yellow-700 dark:text-yellow-400">Atenção</span>
+                </div>
+                <p className="text-sm">
+                  Atrasos reduzem proporcionalmente
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <XCircle className="h-5 w-5 text-red-500" />
+                  <span className="font-semibold text-red-700 dark:text-red-400">Evite</span>
+                </div>
+                <p className="text-sm">
+                  100% erros = <strong>-20 pts</strong>
+                </p>
+              </div>
+            </div>
+
+            {/* Formula Explanation */}
+            <div className="p-4 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2 mb-3">
+                <Calculator className="h-5 w-5 text-primary" />
+                <span className="font-semibold">Fórmula de Cálculo</span>
+              </div>
+              <div className="space-y-2 text-sm font-mono bg-background p-3 rounded border">
+                <p>1. Índice = (Pts Obtidos - Pts Mínimo) / (Pts Máximo - Pts Mínimo)</p>
+                <p>2. Pontuação Diária = (Índice × 40) - 20</p>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                * Isso garante que a pontuação seja justa independente da quantidade de relatórios
+              </p>
+            </div>
+
+            {/* Interactive Example */}
+            <div className="p-4 rounded-lg border bg-card">
+              <div className="flex items-center gap-2 mb-4">
+                <HelpCircle className="h-5 w-5 text-primary" />
+                <span className="font-semibold">Exemplo Interativo</span>
+              </div>
+
+              {/* Scenario Selector */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {EXAMPLE_SCENARIOS.map((s, idx) => (
+                  <Button
+                    key={s.name}
+                    variant={selectedScenario === idx ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSelectedScenario(idx)}
+                  >
+                    {s.name}
+                  </Button>
+                ))}
+              </div>
+
+              {/* Scenario Details */}
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {scenario.reports.map((report, idx) => (
+                    <div
+                      key={report.name}
+                      className="flex items-center gap-2 p-2 rounded bg-muted/50"
+                    >
+                      {getStatusIcon(report.status)}
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{report.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {getStatusLabel(report.status)}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {report.status === "on_time"
+                          ? `+${scenario.configs[idx].onTime}`
+                          : report.status === "late"
+                          ? scenario.configs[idx].late
+                          : scenario.configs[idx].error}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Calculation Breakdown */}
+                <div className="p-3 rounded bg-muted/30 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Pontos Obtidos:</span>
+                    <span className="font-mono">{calculation.sumObtained}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Máximo Possível:</span>
+                    <span className="font-mono text-green-600">{calculation.sumMax}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Mínimo Possível:</span>
+                    <span className="font-mono text-red-600">{calculation.sumMin}</span>
+                  </div>
+                  <div className="border-t pt-2 flex justify-between">
+                    <span>Índice de Desempenho:</span>
+                    <span className="font-mono">{(calculation.performanceIndex * 100).toFixed(1)}%</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-base">
+                    <span>Pontuação do Dia:</span>
+                    <span className={`font-mono ${getScoreColor(calculation.dailyScore)}`}>
+                      {calculation.dailyScore > 0 ? "+" : ""}{calculation.dailyScore}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
+    </Card>
+  );
+}
