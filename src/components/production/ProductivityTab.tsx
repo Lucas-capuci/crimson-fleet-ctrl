@@ -236,8 +236,13 @@ export function ProductivityTab() {
     // Count unique days with entries
     const uniqueDays = new Set(filteredEntries.map((e) => e.date)).size;
 
-    // Average productivity per day (using executado)
-    const avgPerDay = uniqueDays > 0 ? totals.executado / uniqueDays : 0;
+    // Count unique teams with entries
+    const uniqueTeams = new Set(filteredEntries.map((e) => e.team_id)).size;
+
+    // Average execution per team per day: (Total Executado / Equipes com lançamento) / Dias lançados
+    const avgPerDay = uniqueTeams > 0 && uniqueDays > 0 
+      ? (totals.executado / uniqueTeams) / uniqueDays 
+      : 0;
 
     // Ratio Total Executado / Total Programado (percentage)
     const ratioProgExec = totals.programado > 0 ? (totals.executado / totals.programado) * 100 : 0;
@@ -249,6 +254,7 @@ export function ProductivityTab() {
       avgPerDay,
       ratioProgExec,
       uniqueDays,
+      uniqueTeams,
     };
   }, [filteredEntries]);
 
