@@ -45,9 +45,11 @@ import {
 import { 
   Plus, Search, Edit, Trash2, Car, Wrench, Clock, CheckCircle, 
   Calendar, LogOut, ChevronsUpDown, Check, Building, User, Phone,
-  Upload, X, FileText, Image, Video, Download, Eye, Paperclip, BarChart3
+  Upload, X, FileText, Image, Video, Download, Eye, Paperclip, BarChart3,
+  FileWarning
 } from "lucide-react";
 import { FleetIndicatorsTab } from "@/components/fleet/FleetIndicatorsTab";
+import { LaudosTrackingTab } from "@/components/fleet/LaudosTrackingTab";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn, formatDateTime } from "@/lib/exportCsv";
 import { cn } from "@/lib/utils";
@@ -85,6 +87,10 @@ interface Vehicle {
   status: VehicleStatus;
   team_id: string | null;
   gerencia: string | null;
+  laudo_eletrico: string | null;
+  laudo_acustico: string | null;
+  laudo_liner: string | null;
+  laudo_tacografo: string | null;
 }
 
 interface Team {
@@ -187,6 +193,10 @@ const FleetManagement = () => {
     team_id: "",
     status: "ativo" as VehicleStatus,
     gerencia: "",
+    laudo_eletrico: "",
+    laudo_acustico: "",
+    laudo_liner: "",
+    laudo_tacografo: "",
   });
   const [vehicleFiles, setVehicleFiles] = useState<File[]>([]);
   const [existingVehicleAttachments, setExistingVehicleAttachments] = useState<VehicleAttachment[]>([]);
@@ -252,7 +262,7 @@ const FleetManagement = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicles")
-        .select("id, plate, model, status, team_id, gerencia")
+        .select("id, plate, model, status, team_id, gerencia, laudo_eletrico, laudo_acustico, laudo_liner, laudo_tacografo")
         .order("plate");
       if (error) throw error;
       return data as Vehicle[];
@@ -507,7 +517,7 @@ const FleetManagement = () => {
 
   // ==================== VEHICLE MUTATIONS ====================
   const createVehicle = useMutation({
-    mutationFn: async (data: { plate: string; model: string; team_id: string; status: VehicleStatus; gerencia: string }) => {
+    mutationFn: async (data: typeof vehicleFormData) => {
       setIsUploadingVehicleFiles(true);
       
       const { data: vehicleData, error } = await supabase
@@ -518,6 +528,10 @@ const FleetManagement = () => {
           status: data.status,
           team_id: data.team_id || null,
           gerencia: data.gerencia || null,
+          laudo_eletrico: data.laudo_eletrico || null,
+          laudo_acustico: data.laudo_acustico || null,
+          laudo_liner: data.laudo_liner || null,
+          laudo_tacografo: data.laudo_tacografo || null,
         })
         .select()
         .single();
@@ -548,7 +562,7 @@ const FleetManagement = () => {
   });
 
   const updateVehicle = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { plate: string; model: string; team_id: string; status: VehicleStatus; gerencia: string } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: typeof vehicleFormData }) => {
       setIsUploadingVehicleFiles(true);
       
       const { error } = await supabase
@@ -559,6 +573,10 @@ const FleetManagement = () => {
           status: data.status,
           team_id: data.team_id || null,
           gerencia: data.gerencia || null,
+          laudo_eletrico: data.laudo_eletrico || null,
+          laudo_acustico: data.laudo_acustico || null,
+          laudo_liner: data.laudo_liner || null,
+          laudo_tacografo: data.laudo_tacografo || null,
         })
         .eq("id", id);
       if (error) throw error;
@@ -888,6 +906,10 @@ const FleetManagement = () => {
       team_id: vehicle.team_id || "",
       status: vehicle.status,
       gerencia: vehicle.gerencia || "",
+      laudo_eletrico: vehicle.laudo_eletrico || "",
+      laudo_acustico: vehicle.laudo_acustico || "",
+      laudo_liner: vehicle.laudo_liner || "",
+      laudo_tacografo: vehicle.laudo_tacografo || "",
     });
     // Load existing attachments
     const { data: attachments } = await supabase
@@ -906,7 +928,17 @@ const FleetManagement = () => {
   };
 
   const resetVehicleForm = () => {
-    setVehicleFormData({ plate: "", model: "", team_id: "", status: "ativo", gerencia: "" });
+    setVehicleFormData({ 
+      plate: "", 
+      model: "", 
+      team_id: "", 
+      status: "ativo", 
+      gerencia: "",
+      laudo_eletrico: "",
+      laudo_acustico: "",
+      laudo_liner: "",
+      laudo_tacografo: "",
+    });
     setEditingVehicle(null);
     setVehicleFiles([]);
     setExistingVehicleAttachments([]);
@@ -1146,6 +1178,10 @@ const FleetManagement = () => {
             <BarChart3 className="h-4 w-4" />
             Indicadores de Frotas
           </TabsTrigger>
+          <TabsTrigger value="laudos" className="gap-2">
+            <FileWarning className="h-4 w-4" />
+            Acompanhamento de Laudos
+          </TabsTrigger>
         </TabsList>
 
         {/* ==================== VEHICLES TAB ==================== */}
@@ -1273,6 +1309,52 @@ const FleetManagement = () => {
                           <SelectItem value="mobilizar">Mobilizar</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+                    
+                    {/* Laudo Date Fields */}
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <FileWarning className="h-4 w-4 text-muted-foreground" />
+                        Validade dos Laudos
+                      </Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label htmlFor="laudo_eletrico" className="text-xs text-muted-foreground">Laudo Elétrico</Label>
+                          <Input
+                            id="laudo_eletrico"
+                            type="date"
+                            value={vehicleFormData.laudo_eletrico}
+                            onChange={(e) => setVehicleFormData({ ...vehicleFormData, laudo_eletrico: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="laudo_acustico" className="text-xs text-muted-foreground">Laudo Acústico</Label>
+                          <Input
+                            id="laudo_acustico"
+                            type="date"
+                            value={vehicleFormData.laudo_acustico}
+                            onChange={(e) => setVehicleFormData({ ...vehicleFormData, laudo_acustico: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="laudo_liner" className="text-xs text-muted-foreground">Laudo Liner</Label>
+                          <Input
+                            id="laudo_liner"
+                            type="date"
+                            value={vehicleFormData.laudo_liner}
+                            onChange={(e) => setVehicleFormData({ ...vehicleFormData, laudo_liner: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="laudo_tacografo" className="text-xs text-muted-foreground">Laudo Tacógrafo</Label>
+                          <Input
+                            id="laudo_tacografo"
+                            type="date"
+                            value={vehicleFormData.laudo_tacografo}
+                            onChange={(e) => setVehicleFormData({ ...vehicleFormData, laudo_tacografo: e.target.value })}
+                          />
+                        </div>
+                      </div>
                     </div>
                     
                     {/* File Upload Section */}
@@ -2271,6 +2353,11 @@ const FleetManagement = () => {
         {/* ==================== INDICATORS TAB ==================== */}
         <TabsContent value="indicators">
           <FleetIndicatorsTab />
+        </TabsContent>
+
+        {/* ==================== LAUDOS TAB ==================== */}
+        <TabsContent value="laudos">
+          <LaudosTrackingTab />
         </TabsContent>
       </Tabs>
     </MainLayout>

@@ -965,6 +965,10 @@ export type Database = {
           created_at: string
           gerencia: string | null
           id: string
+          laudo_acustico: string | null
+          laudo_eletrico: string | null
+          laudo_liner: string | null
+          laudo_tacografo: string | null
           model: string
           plate: string
           status: Database["public"]["Enums"]["vehicle_status"]
@@ -976,6 +980,10 @@ export type Database = {
           created_at?: string
           gerencia?: string | null
           id?: string
+          laudo_acustico?: string | null
+          laudo_eletrico?: string | null
+          laudo_liner?: string | null
+          laudo_tacografo?: string | null
           model: string
           plate: string
           status?: Database["public"]["Enums"]["vehicle_status"]
@@ -987,6 +995,10 @@ export type Database = {
           created_at?: string
           gerencia?: string | null
           id?: string
+          laudo_acustico?: string | null
+          laudo_eletrico?: string | null
+          laudo_liner?: string | null
+          laudo_tacografo?: string | null
           model?: string
           plate?: string
           status?: Database["public"]["Enums"]["vehicle_status"]
