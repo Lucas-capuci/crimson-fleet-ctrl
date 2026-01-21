@@ -28,6 +28,7 @@ import { AnalyticsTab } from "@/components/budget/AnalyticsTab";
 interface Team {
   id: string;
   name: string;
+  type?: string;
 }
 
 interface ServiceCatalog {
@@ -99,6 +100,7 @@ export default function Budget() {
   const [oseFilter, setOseFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [teamFilter, setTeamFilter] = useState<string>("all");
+  const [teamTypeFilter, setTeamTypeFilter] = useState<string>("all");
   const [dateFromFilter, setDateFromFilter] = useState<Date | undefined>(undefined);
   const [dateToFilter, setDateToFilter] = useState<Date | undefined>(undefined);
   
@@ -154,7 +156,7 @@ export default function Budget() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("teams")
-        .select("id, name")
+        .select("id, name, type")
         .order("name");
       if (error) throw error;
       return data as Team[];
@@ -230,18 +232,21 @@ export default function Budget() {
 
   // Fetch all items for analytics
   const { data: allOseItems = [] } = useQuery({
-    queryKey: ["all-ose-items-analytics", teamFilter, dateFromFilter, dateToFilter],
+    queryKey: ["all-ose-items-analytics", teamFilter, teamTypeFilter, dateFromFilter, dateToFilter],
     queryFn: async () => {
       let query = supabase
         .from("ose_items")
-        .select("*, service:service_id(*), trip:trip_id(*, teams:team_id(id, name))");
+        .select("*, service:service_id(*), trip:trip_id(*, teams:team_id(id, name, type))");
 
       const { data, error } = await query;
       if (error) throw error;
 
-      // Filter by team and date
+      // Filter by team type, team and date
       return (data || []).filter((item: any) => {
         if (!item.trip) return false;
+        
+        // Filter by team type
+        if (teamTypeFilter !== "all" && item.trip.teams?.type !== teamTypeFilter) return false;
         
         if (teamFilter !== "all" && item.trip.team_id !== teamFilter) return false;
         
@@ -607,6 +612,7 @@ export default function Budget() {
     setOseFilter("");
     setStatusFilter("all");
     setTeamFilter("all");
+    setTeamTypeFilter("all");
     setDateFromFilter(undefined);
     setDateToFilter(undefined);
   };
@@ -1378,6 +1384,8 @@ export default function Budget() {
               teams={teams}
               teamFilter={teamFilter}
               setTeamFilter={setTeamFilter}
+              teamTypeFilter={teamTypeFilter}
+              setTeamTypeFilter={setTeamTypeFilter}
               dateFromFilter={dateFromFilter}
               setDateFromFilter={setDateFromFilter}
               dateToFilter={dateToFilter}

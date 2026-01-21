@@ -18,6 +18,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell }
 interface Team {
   id: string;
   name: string;
+  type?: string;
 }
 
 interface ServiceCatalog {
@@ -64,6 +65,8 @@ interface AnalyticsTabProps {
   teams: Team[];
   teamFilter: string;
   setTeamFilter: (value: string) => void;
+  teamTypeFilter: string;
+  setTeamTypeFilter: (value: string) => void;
   dateFromFilter: Date | undefined;
   setDateFromFilter: (date: Date | undefined) => void;
   dateToFilter: Date | undefined;
@@ -71,6 +74,15 @@ interface AnalyticsTabProps {
   clearFilters: () => void;
   oses: any[];
 }
+
+const TEAM_TYPE_LABELS: Record<string, string> = {
+  linha_viva: "Linha Viva",
+  linha_morta: "Linha Morta",
+  poda: "Poda",
+  linha_morta_obras: "LM Obras",
+  recolha: "Recolha",
+  linha_viva_obras: "LV Obras",
+};
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("pt-BR", {
@@ -84,6 +96,8 @@ export function AnalyticsTab({
   teams,
   teamFilter,
   setTeamFilter,
+  teamTypeFilter,
+  setTeamTypeFilter,
   dateFromFilter,
   setDateFromFilter,
   dateToFilter,
@@ -91,6 +105,11 @@ export function AnalyticsTab({
   clearFilters,
   oses,
 }: AnalyticsTabProps) {
+  // Filter teams by type for the team dropdown
+  const filteredTeamsByType = useMemo(() => {
+    if (teamTypeFilter === "all") return teams;
+    return teams.filter(t => t.type === teamTypeFilter);
+  }, [teams, teamTypeFilter]);
   // Analytics by service (UP)
   const analyticsData = useMemo((): AnalyticItem[] => {
     const grouped: Record<string, AnalyticItem> = {};
@@ -298,13 +317,35 @@ export function AnalyticsTab({
       <Card>
         <CardContent className="pt-4">
           <div className="flex flex-wrap gap-4">
+            <Select value={teamTypeFilter} onValueChange={(value) => {
+              setTeamTypeFilter(value);
+              // Reset team filter when type changes
+              if (value !== "all" && teamFilter !== "all") {
+                const selectedTeam = teams.find(t => t.id === teamFilter);
+                if (selectedTeam && selectedTeam.type !== value) {
+                  setTeamFilter("all");
+                }
+              }
+            }}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Tipo de Equipe" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os Tipos</SelectItem>
+                {Object.entries(TEAM_TYPE_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={teamFilter} onValueChange={setTeamFilter}>
               <SelectTrigger className="w-[200px]">
                 <SelectValue placeholder="Equipe" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas Equipes</SelectItem>
-                {teams.map((team) => (
+                {filteredTeamsByType.map((team) => (
                   <SelectItem key={team.id} value={team.id}>
                     {team.name}
                   </SelectItem>
@@ -325,9 +366,34 @@ export function AnalyticsTab({
                   onSelect={setDateFromFilter}
                   locale={ptBR}
                   initialFocus
+                  className="pointer-events-auto"
                 />
               </PopoverContent>
             </Popover>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className={cn("w-[150px]", dateToFilter && "text-foreground")}>
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateToFilter ? format(dateToFilter, "dd/MM/yyyy") : "Data final"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={dateToFilter}
+                  onSelect={setDateToFilter}
+                  locale={ptBR}
+                  initialFocus
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+            {(teamFilter !== "all" || teamTypeFilter !== "all" || dateFromFilter || dateToFilter) && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                <X className="h-4 w-4 mr-1" />
+                Limpar
+              </Button>
+            )}
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" className={cn("w-[150px]", dateToFilter && "text-foreground")}>
