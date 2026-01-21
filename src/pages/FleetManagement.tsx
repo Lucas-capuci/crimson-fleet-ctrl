@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,8 @@ import {
 } from "@/components/ui/popover";
 import { 
   Plus, Search, Edit, Trash2, Car, Wrench, Clock, CheckCircle, 
-  Calendar, LogOut, ChevronsUpDown, Check, Building, User, Phone
+  Calendar, LogOut, ChevronsUpDown, Check, Building, User, Phone,
+  Upload, X, FileText, Image, Video
 } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn, formatDateTime } from "@/lib/exportCsv";
@@ -57,12 +58,32 @@ import { differenceInHours, differenceInDays } from "date-fns";
 // ==================== VEHICLES TYPES ====================
 type VehicleStatus = "ativo" | "manutencao" | "reserva" | "oficina" | "mobilizar";
 
+type GerenciaType = "C&M" | "STC Comercial" | "STC Emergencial" | "STC Corte e religa" | "Perdas" | "Âncora Comercial";
+
+const GERENCIAS: GerenciaType[] = [
+  "C&M",
+  "STC Comercial",
+  "STC Emergencial",
+  "STC Corte e religa",
+  "Perdas",
+  "Âncora Comercial",
+];
+
+interface VehicleAttachment {
+  id: string;
+  vehicle_id: string;
+  file_url: string;
+  file_name: string;
+  file_type: string;
+}
+
 interface Vehicle {
   id: string;
   plate: string;
   model: string;
   status: VehicleStatus;
   team_id: string | null;
+  gerencia: string | null;
 }
 
 interface Team {
@@ -132,7 +153,12 @@ const FleetManagement = () => {
     model: "",
     team_id: "",
     status: "ativo" as VehicleStatus,
+    gerencia: "",
   });
+  const [vehicleFiles, setVehicleFiles] = useState<File[]>([]);
+  const [existingVehicleAttachments, setExistingVehicleAttachments] = useState<VehicleAttachment[]>([]);
+  const [isUploadingVehicleFiles, setIsUploadingVehicleFiles] = useState(false);
+  const vehicleFileInputRef = useRef<HTMLInputElement>(null);
 
   // ==================== WORKSHOP STATE ====================
   const [workshopSearchTerm, setWorkshopSearchTerm] = useState("");
@@ -176,7 +202,7 @@ const FleetManagement = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicles")
-        .select("id, plate, model, status, team_id")
+        .select("id, plate, model, status, team_id, gerencia")
         .order("plate");
       if (error) throw error;
       return data as Vehicle[];
@@ -257,18 +283,107 @@ const FleetManagement = () => {
     },
   });
 
+  // ==================== FILE UPLOAD HELPERS ====================
+  const uploadVehicleFiles = async (vehicleId: string, files: File[]) => {
+    const uploadedAttachments: { file_url: string; file_name: string; file_type: string }[] = [];
+    
+    for (const file of files) {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${vehicleId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('fleet-files')
+        .upload(fileName, file);
+      
+      if (uploadError) throw uploadError;
+      
+      const { data: urlData } = supabase.storage.from('fleet-files').getPublicUrl(fileName);
+      
+      uploadedAttachments.push({
+        file_url: urlData.publicUrl,
+        file_name: file.name,
+        file_type: file.type,
+      });
+    }
+    
+    return uploadedAttachments;
+  };
+
+  const handleVehicleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const totalFiles = vehicleFiles.length + existingVehicleAttachments.length + files.length;
+    
+    if (totalFiles > 4) {
+      toast({
+        title: "Limite de arquivos excedido",
+        description: "Você pode anexar no máximo 4 documentos por veículo.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setVehicleFiles(prev => [...prev, ...files]);
+    if (vehicleFileInputRef.current) {
+      vehicleFileInputRef.current.value = '';
+    }
+  };
+
+  const removeVehicleFile = (index: number) => {
+    setVehicleFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const removeExistingVehicleAttachment = async (attachment: VehicleAttachment) => {
+    try {
+      const { error } = await supabase
+        .from("vehicle_attachments")
+        .delete()
+        .eq("id", attachment.id);
+      
+      if (error) throw error;
+      
+      setExistingVehicleAttachments(prev => prev.filter(a => a.id !== attachment.id));
+      toast({ title: "Arquivo removido com sucesso!" });
+    } catch (error: any) {
+      toast({ title: "Erro ao remover arquivo", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const getFileIcon = (fileType: string) => {
+    if (fileType.startsWith('image/')) return <Image className="h-4 w-4" />;
+    if (fileType.startsWith('video/')) return <Video className="h-4 w-4" />;
+    return <FileText className="h-4 w-4" />;
+  };
+
   // ==================== VEHICLE MUTATIONS ====================
   const createVehicle = useMutation({
-    mutationFn: async (data: { plate: string; model: string; team_id: string; status: VehicleStatus }) => {
-      const { error } = await supabase
+    mutationFn: async (data: { plate: string; model: string; team_id: string; status: VehicleStatus; gerencia: string }) => {
+      setIsUploadingVehicleFiles(true);
+      
+      const { data: vehicleData, error } = await supabase
         .from("vehicles")
         .insert({ 
           plate: data.plate, 
           model: data.model, 
           status: data.status,
-          team_id: data.team_id || null 
-        });
+          team_id: data.team_id || null,
+          gerencia: data.gerencia || null,
+        })
+        .select()
+        .single();
       if (error) throw error;
+      
+      // Upload files if any
+      if (vehicleFiles.length > 0) {
+        const attachments = await uploadVehicleFiles(vehicleData.id, vehicleFiles);
+        for (const attachment of attachments) {
+          await supabase.from("vehicle_attachments").insert({
+            vehicle_id: vehicleData.id,
+            ...attachment,
+          });
+        }
+      }
+      
+      setIsUploadingVehicleFiles(false);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
@@ -276,22 +391,39 @@ const FleetManagement = () => {
       resetVehicleForm();
     },
     onError: (error) => {
+      setIsUploadingVehicleFiles(false);
       toast({ title: "Erro ao cadastrar veículo", description: error.message, variant: "destructive" });
     },
   });
 
   const updateVehicle = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { plate: string; model: string; team_id: string; status: VehicleStatus } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { plate: string; model: string; team_id: string; status: VehicleStatus; gerencia: string } }) => {
+      setIsUploadingVehicleFiles(true);
+      
       const { error } = await supabase
         .from("vehicles")
         .update({ 
           plate: data.plate, 
           model: data.model, 
           status: data.status,
-          team_id: data.team_id || null 
+          team_id: data.team_id || null,
+          gerencia: data.gerencia || null,
         })
         .eq("id", id);
       if (error) throw error;
+      
+      // Upload new files if any
+      if (vehicleFiles.length > 0) {
+        const attachments = await uploadVehicleFiles(id, vehicleFiles);
+        for (const attachment of attachments) {
+          await supabase.from("vehicle_attachments").insert({
+            vehicle_id: id,
+            ...attachment,
+          });
+        }
+      }
+      
+      setIsUploadingVehicleFiles(false);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
@@ -299,6 +431,7 @@ const FleetManagement = () => {
       resetVehicleForm();
     },
     onError: (error) => {
+      setIsUploadingVehicleFiles(false);
       toast({ title: "Erro ao atualizar veículo", description: error.message, variant: "destructive" });
     },
   });
@@ -517,6 +650,7 @@ const FleetManagement = () => {
   const vehicleCsvColumns: CsvColumn[] = [
     { key: "plate", header: "Placa" },
     { key: "model", header: "Modelo" },
+    { key: "gerencia", header: "Gerência", format: (v) => v || "-" },
     { key: "status", header: "Status", format: (v) => vehicleStatusConfig[v as VehicleStatus]?.label || v },
     { key: "team_id", header: "Equipe", format: (v) => getTeamName(v) || "-" },
     { key: "team_id", header: "Supervisor", format: (v) => getSupervisorName(v) || "-" },
@@ -552,14 +686,22 @@ const FleetManagement = () => {
     }
   };
 
-  const handleEditVehicle = (vehicle: Vehicle) => {
+  const handleEditVehicle = async (vehicle: Vehicle) => {
     setEditingVehicle(vehicle);
     setVehicleFormData({
       plate: vehicle.plate,
       model: vehicle.model,
       team_id: vehicle.team_id || "",
       status: vehicle.status,
+      gerencia: vehicle.gerencia || "",
     });
+    // Load existing attachments
+    const { data: attachments } = await supabase
+      .from("vehicle_attachments")
+      .select("*")
+      .eq("vehicle_id", vehicle.id);
+    setExistingVehicleAttachments(attachments || []);
+    setVehicleFiles([]);
     setIsVehicleDialogOpen(true);
   };
 
@@ -570,8 +712,10 @@ const FleetManagement = () => {
   };
 
   const resetVehicleForm = () => {
-    setVehicleFormData({ plate: "", model: "", team_id: "", status: "ativo" });
+    setVehicleFormData({ plate: "", model: "", team_id: "", status: "ativo", gerencia: "" });
     setEditingVehicle(null);
+    setVehicleFiles([]);
+    setExistingVehicleAttachments([]);
     setIsVehicleDialogOpen(false);
   };
 
@@ -798,7 +942,7 @@ const FleetManagement = () => {
                       {editingVehicle ? "Atualize os dados do veículo" : "Preencha os dados para cadastrar um novo veículo"}
                     </DialogDescription>
                   </DialogHeader>
-                  <form onSubmit={handleVehicleSubmit} className="space-y-4">
+                  <form onSubmit={handleVehicleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="plate">Placa</Label>
@@ -821,24 +965,45 @@ const FleetManagement = () => {
                         />
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="team">Equipe</Label>
-                      <Select
-                        value={vehicleFormData.team_id || "none"}
-                        onValueChange={(value) => setVehicleFormData({ ...vehicleFormData, team_id: value === "none" ? "" : value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione uma equipe" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Nenhuma</SelectItem>
-                          {teams.map((team) => (
-                            <SelectItem key={team.id} value={team.id}>
-                              {team.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="team">Equipe</Label>
+                        <Select
+                          value={vehicleFormData.team_id || "none"}
+                          onValueChange={(value) => setVehicleFormData({ ...vehicleFormData, team_id: value === "none" ? "" : value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione uma equipe" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nenhuma</SelectItem>
+                            {teams.map((team) => (
+                              <SelectItem key={team.id} value={team.id}>
+                                {team.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="gerencia">Gerência</Label>
+                        <Select
+                          value={vehicleFormData.gerencia || "none"}
+                          onValueChange={(value) => setVehicleFormData({ ...vehicleFormData, gerencia: value === "none" ? "" : value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a gerência" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nenhuma</SelectItem>
+                            {GERENCIAS.map((gerencia) => (
+                              <SelectItem key={gerencia} value={gerencia}>
+                                {gerencia}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="status">Status</Label>
@@ -858,12 +1023,84 @@ const FleetManagement = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                    
+                    {/* File Upload Section */}
+                    <div className="space-y-2">
+                      <Label>Documentos/Fotos/Vídeos (máx. 4)</Label>
+                      <input
+                        ref={vehicleFileInputRef}
+                        type="file"
+                        multiple
+                        accept="image/*,video/*,.pdf,.doc,.docx"
+                        onChange={handleVehicleFileSelect}
+                        className="hidden"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full gap-2"
+                        onClick={() => vehicleFileInputRef.current?.click()}
+                        disabled={vehicleFiles.length + existingVehicleAttachments.length >= 4}
+                      >
+                        <Upload className="h-4 w-4" />
+                        Anexar Arquivos ({vehicleFiles.length + existingVehicleAttachments.length}/4)
+                      </Button>
+                      
+                      {/* Existing attachments */}
+                      {existingVehicleAttachments.length > 0 && (
+                        <div className="space-y-2 mt-2">
+                          <p className="text-xs text-muted-foreground">Arquivos existentes:</p>
+                          {existingVehicleAttachments.map((attachment) => (
+                            <div key={attachment.id} className="flex items-center justify-between bg-muted/50 rounded-lg p-2">
+                              <div className="flex items-center gap-2 overflow-hidden">
+                                {getFileIcon(attachment.file_type)}
+                                <span className="text-sm truncate">{attachment.file_name}</span>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 shrink-0"
+                                onClick={() => removeExistingVehicleAttachment(attachment)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* New files to upload */}
+                      {vehicleFiles.length > 0 && (
+                        <div className="space-y-2 mt-2">
+                          <p className="text-xs text-muted-foreground">Novos arquivos:</p>
+                          {vehicleFiles.map((file, index) => (
+                            <div key={index} className="flex items-center justify-between bg-muted/50 rounded-lg p-2">
+                              <div className="flex items-center gap-2 overflow-hidden">
+                                {getFileIcon(file.type)}
+                                <span className="text-sm truncate">{file.name}</span>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 shrink-0"
+                                onClick={() => removeVehicleFile(index)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    
                     <div className="flex justify-end gap-3 pt-4">
                       <Button type="button" variant="outline" onClick={resetVehicleForm}>
                         Cancelar
                       </Button>
-                      <Button type="submit" disabled={createVehicle.isPending || updateVehicle.isPending}>
-                        {editingVehicle ? "Atualizar" : "Cadastrar"}
+                      <Button type="submit" disabled={createVehicle.isPending || updateVehicle.isPending || isUploadingVehicleFiles}>
+                        {isUploadingVehicleFiles ? "Enviando arquivos..." : editingVehicle ? "Atualizar" : "Cadastrar"}
                       </Button>
                     </div>
                   </form>
@@ -878,6 +1115,7 @@ const FleetManagement = () => {
                 <TableRow className="bg-muted/50">
                   <TableHead>Placa</TableHead>
                   <TableHead>Modelo</TableHead>
+                  <TableHead>Gerência</TableHead>
                   <TableHead>Equipe</TableHead>
                   <TableHead>Supervisor</TableHead>
                   <TableHead>Status</TableHead>
@@ -896,6 +1134,9 @@ const FleetManagement = () => {
                         </div>
                       </TableCell>
                       <TableCell>{vehicle.model}</TableCell>
+                      <TableCell>
+                        {vehicle.gerencia || <span className="text-muted-foreground">-</span>}
+                      </TableCell>
                       <TableCell>
                         {getTeamName(vehicle.team_id) || <span className="text-muted-foreground">-</span>}
                       </TableCell>
