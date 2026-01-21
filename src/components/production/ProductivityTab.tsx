@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, startOfMonth, endOfMonth, getDaysInMonth, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, BarChart3, Table as TableIcon, Users, UserCheck, Filter, TrendingUp } from "lucide-react";
+import { Plus, BarChart3, Table as TableIcon, Users, UserCheck, Filter, TrendingUp, Target, CheckCircle2, Calculator, Percent } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -221,6 +221,37 @@ export function ProductivityTab() {
     return entries.filter(e => e.teams?.type === selectedTeamTypeFilter);
   }, [entries, selectedTeamTypeFilter]);
 
+  // Calculate summary statistics
+  const summaryStats = useMemo(() => {
+    const totals = filteredEntries.reduce(
+      (acc, entry) => {
+        if (entry.entry_type === "programado") acc.programado += entry.value;
+        if (entry.entry_type === "executado") acc.executado += entry.value;
+        if (entry.entry_type === "validado_eqtl") acc.validado_eqtl += entry.value;
+        return acc;
+      },
+      { programado: 0, executado: 0, validado_eqtl: 0 }
+    );
+
+    // Count unique days with entries
+    const uniqueDays = new Set(filteredEntries.map((e) => e.date)).size;
+
+    // Average productivity per day (using executado)
+    const avgPerDay = uniqueDays > 0 ? totals.executado / uniqueDays : 0;
+
+    // Ratio Total Executado / Total Programado (percentage)
+    const ratioProgExec = totals.programado > 0 ? (totals.executado / totals.programado) * 100 : 0;
+
+    return {
+      totalProgramado: totals.programado,
+      totalExecutado: totals.executado,
+      totalValidado: totals.validado_eqtl,
+      avgPerDay,
+      ratioProgExec,
+      uniqueDays,
+    };
+  }, [filteredEntries]);
+
   // Filter teams for display (also filtered by type and supervisor)
   const filteredTeams = useMemo(() => {
     let result = teams;
@@ -375,6 +406,83 @@ export function ProductivityTab() {
 
   return (
     <div className="space-y-4">
+      {/* Summary Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Média por Dia</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {summaryStats.avgPerDay.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {summaryStats.uniqueDays} dias com lançamentos
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <Calculator className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Prog. / Exec.</p>
+                <p className={cn(
+                  "text-2xl font-bold",
+                  summaryStats.ratioProgExec >= 100 ? "text-green-600" :
+                  summaryStats.ratioProgExec >= 80 ? "text-yellow-600" : "text-red-600"
+                )}>
+                  {summaryStats.ratioProgExec.toFixed(1)}%
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {summaryStats.totalProgramado.toLocaleString("pt-BR")} / {summaryStats.totalExecutado.toLocaleString("pt-BR")}
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <Percent className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Total Programado</p>
+                <p className="text-2xl font-bold" style={{ color: PRODUCTIVITY_COLORS.programado }}>
+                  {summaryStats.totalProgramado.toLocaleString("pt-BR")}
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-full flex items-center justify-center" style={{ backgroundColor: `${PRODUCTIVITY_COLORS.programado}20` }}>
+                <Target className="h-5 w-5" style={{ color: PRODUCTIVITY_COLORS.programado }} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Total Executado</p>
+                <p className="text-2xl font-bold" style={{ color: PRODUCTIVITY_COLORS.executado }}>
+                  {summaryStats.totalExecutado.toLocaleString("pt-BR")}
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-full flex items-center justify-center" style={{ backgroundColor: `${PRODUCTIVITY_COLORS.executado}20` }}>
+                <CheckCircle2 className="h-5 w-5" style={{ color: PRODUCTIVITY_COLORS.executado }} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
         <Select value={selectedMonth} onValueChange={setSelectedMonth}>
