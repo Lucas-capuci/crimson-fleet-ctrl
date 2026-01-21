@@ -45,7 +45,7 @@ import {
 import { 
   Plus, Search, Edit, Trash2, Car, Wrench, Clock, CheckCircle, 
   Calendar, LogOut, ChevronsUpDown, Check, Building, User, Phone,
-  Upload, X, FileText, Image, Video
+  Upload, X, FileText, Image, Video, Download, Eye, Paperclip
 } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { CsvColumn, formatDateTime } from "@/lib/exportCsv";
@@ -159,6 +159,9 @@ const FleetManagement = () => {
   const [existingVehicleAttachments, setExistingVehicleAttachments] = useState<VehicleAttachment[]>([]);
   const [isUploadingVehicleFiles, setIsUploadingVehicleFiles] = useState(false);
   const vehicleFileInputRef = useRef<HTMLInputElement>(null);
+  const [isViewAttachmentsOpen, setIsViewAttachmentsOpen] = useState(false);
+  const [viewingVehicleAttachments, setViewingVehicleAttachments] = useState<VehicleAttachment[]>([]);
+  const [viewingVehiclePlate, setViewingVehiclePlate] = useState("");
 
   // ==================== WORKSHOP STATE ====================
   const [workshopSearchTerm, setWorkshopSearchTerm] = useState("");
@@ -352,6 +355,31 @@ const FleetManagement = () => {
     if (fileType.startsWith('image/')) return <Image className="h-4 w-4" />;
     if (fileType.startsWith('video/')) return <Video className="h-4 w-4" />;
     return <FileText className="h-4 w-4" />;
+  };
+
+  const openViewAttachments = async (vehicle: Vehicle) => {
+    const { data: attachments } = await supabase
+      .from("vehicle_attachments")
+      .select("*")
+      .eq("vehicle_id", vehicle.id);
+    
+    setViewingVehicleAttachments(attachments || []);
+    setViewingVehiclePlate(vehicle.plate);
+    setIsViewAttachmentsOpen(true);
+  };
+
+  const handleDownloadFile = (url: string, fileName: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleViewFile = (url: string) => {
+    window.open(url, '_blank');
   };
 
   // ==================== VEHICLE MUTATIONS ====================
@@ -1052,19 +1080,42 @@ const FleetManagement = () => {
                           <p className="text-xs text-muted-foreground">Arquivos existentes:</p>
                           {existingVehicleAttachments.map((attachment) => (
                             <div key={attachment.id} className="flex items-center justify-between bg-muted/50 rounded-lg p-2">
-                              <div className="flex items-center gap-2 overflow-hidden">
+                              <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
                                 {getFileIcon(attachment.file_type)}
                                 <span className="text-sm truncate">{attachment.file_name}</span>
                               </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 shrink-0"
-                                onClick={() => removeExistingVehicleAttachment(attachment)}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => handleViewFile(attachment.file_url)}
+                                  title="Visualizar"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => handleDownloadFile(attachment.file_url, attachment.file_name)}
+                                  title="Baixar"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => removeExistingVehicleAttachment(attachment)}
+                                  title="Remover"
+                                >
+                                  <X className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1119,7 +1170,7 @@ const FleetManagement = () => {
                   <TableHead>Equipe</TableHead>
                   <TableHead>Supervisor</TableHead>
                   <TableHead>Status</TableHead>
-                  {isAdmin && <TableHead className="text-right">Ações</TableHead>}
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1148,18 +1199,23 @@ const FleetManagement = () => {
                           {status.label}
                         </span>
                       </TableCell>
-                      {isAdmin && (
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => handleEditVehicle(vehicle)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteVehicle(vehicle.id)}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => openViewAttachments(vehicle)} title="Ver anexos">
+                            <Paperclip className="h-4 w-4" />
+                          </Button>
+                          {isAdmin && (
+                            <>
+                              <Button variant="ghost" size="icon" onClick={() => handleEditVehicle(vehicle)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleDeleteVehicle(vehicle.id)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -1174,6 +1230,59 @@ const FleetManagement = () => {
               </div>
             )}
           </div>
+
+          {/* View Attachments Dialog */}
+          <Dialog open={isViewAttachmentsOpen} onOpenChange={setIsViewAttachmentsOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Paperclip className="h-5 w-5" />
+                  Anexos - {viewingVehiclePlate}
+                </DialogTitle>
+                <DialogDescription>
+                  Visualize e baixe os documentos anexados a este veículo
+                </DialogDescription>
+              </DialogHeader>
+              {viewingVehicleAttachments.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Nenhum anexo encontrado para este veículo
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {viewingVehicleAttachments.map((attachment) => (
+                    <div key={attachment.id} className="flex items-center justify-between bg-muted/50 rounded-lg p-3">
+                      <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
+                        <div className="p-2 rounded-lg bg-primary/10">
+                          {getFileIcon(attachment.file_type)}
+                        </div>
+                        <span className="text-sm font-medium truncate">{attachment.file_name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1"
+                          onClick={() => handleViewFile(attachment.file_url)}
+                        >
+                          <Eye className="h-4 w-4" />
+                          Ver
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1"
+                          onClick={() => handleDownloadFile(attachment.file_url, attachment.file_name)}
+                        >
+                          <Download className="h-4 w-4" />
+                          Baixar
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* ==================== WORKSHOP TAB ==================== */}
