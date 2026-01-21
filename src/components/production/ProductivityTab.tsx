@@ -411,8 +411,8 @@ export function ProductivityTab() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground font-medium">Média por Dia</p>
+            <div>
+                <p className="text-xs text-muted-foreground font-medium">Média Exec. / Dia</p>
                 <p className="text-2xl font-bold text-foreground">
                   {summaryStats.avgPerDay.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
                 </p>
