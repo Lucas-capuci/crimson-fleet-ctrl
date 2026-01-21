@@ -925,9 +925,45 @@ export type Database = {
         }
         Relationships: []
       }
+      vehicle_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_type: string
+          file_url: string
+          id: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_type: string
+          file_url: string
+          id?: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_type?: string
+          file_url?: string
+          id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_attachments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicles: {
         Row: {
           created_at: string
+          gerencia: string | null
           id: string
           model: string
           plate: string
@@ -938,6 +974,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          gerencia?: string | null
           id?: string
           model: string
           plate: string
@@ -948,6 +985,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          gerencia?: string | null
           id?: string
           model?: string
           plate?: string
@@ -966,42 +1004,86 @@ export type Database = {
           },
         ]
       }
+      workshop_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_type: string
+          file_url: string
+          id: string
+          workshop_entry_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_type: string
+          file_url: string
+          id?: string
+          workshop_entry_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_type?: string
+          file_url?: string
+          id?: string
+          workshop_entry_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workshop_attachments_workshop_entry_id_fkey"
+            columns: ["workshop_entry_id"]
+            isOneToOne: false
+            referencedRelation: "workshop_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workshop_entries: {
         Row: {
           created_at: string
           entry_date: string
           exit_date: string | null
           id: string
+          maintenance_cost: number | null
           notes: string | null
           predicted_exit_date: string | null
           reason: string
+          reason_type: string | null
           status: Database["public"]["Enums"]["maintenance_status"]
           updated_at: string
           vehicle_id: string
+          workshop_name: string | null
         }
         Insert: {
           created_at?: string
           entry_date?: string
           exit_date?: string | null
           id?: string
+          maintenance_cost?: number | null
           notes?: string | null
           predicted_exit_date?: string | null
           reason: string
+          reason_type?: string | null
           status?: Database["public"]["Enums"]["maintenance_status"]
           updated_at?: string
           vehicle_id: string
+          workshop_name?: string | null
         }
         Update: {
           created_at?: string
           entry_date?: string
           exit_date?: string | null
           id?: string
+          maintenance_cost?: number | null
           notes?: string | null
           predicted_exit_date?: string | null
           reason?: string
+          reason_type?: string | null
           status?: Database["public"]["Enums"]["maintenance_status"]
           updated_at?: string
           vehicle_id?: string
+          workshop_name?: string | null
         }
         Relationships: [
           {
