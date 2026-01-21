@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, startOfMonth, endOfMonth, getDaysInMonth, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, BarChart3, Table as TableIcon, Users, UserCheck, Filter, TrendingUp, Target, CheckCircle2, Calculator, Percent } from "lucide-react";
+import { Plus, BarChart3, Table as TableIcon, Users, UserCheck, TrendingUp, Target, CheckCircle2, Calculator, Percent } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Legend, CartesianGrid, Cell, LabelList, LineChart, Line } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Legend, CartesianGrid, Cell, LabelList, LineChart, Line, ReferenceLine } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -62,7 +62,11 @@ const PRODUCTIVITY_COLORS = {
   programado: "#1e3a5f",    // Dark blue
   executado: "#4ade80",     // Light green
   validado_eqtl: "#c55a11", // Dark orange
+  meta: "#dc2626",          // Red for goal line
 };
+
+// Goal per poda team (in anomalies)
+const PODA_GOAL_PER_TEAM = 15;
 
 const chartConfig = {
   programado: {
@@ -86,7 +90,8 @@ export function ProductivityTab() {
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), "yyyy-MM"));
   const [selectedDayFilter, setSelectedDayFilter] = useState("all");
   const [selectedTeamFilter, setSelectedTeamFilter] = useState("all");
-  const [selectedTeamTypeFilter, setSelectedTeamTypeFilter] = useState("all");
+  // Force poda filter - this module is specifically for poda teams
+  const selectedTeamTypeFilter = "poda";
   const [selectedSupervisorFilter, setSelectedSupervisorFilter] = useState("all");
   
   // Entry form state
@@ -215,9 +220,8 @@ export function ProductivityTab() {
     },
   });
 
-  // Filter entries by team type
+  // Filter entries by team type (only poda teams)
   const filteredEntries = useMemo(() => {
-    if (selectedTeamTypeFilter === "all") return entries;
     return entries.filter(e => e.teams?.type === selectedTeamTypeFilter);
   }, [entries, selectedTeamTypeFilter]);
 
@@ -258,12 +262,10 @@ export function ProductivityTab() {
     };
   }, [filteredEntries]);
 
-  // Filter teams for display (also filtered by type and supervisor)
+  // Filter teams for display (only poda teams, also filtered by supervisor)
   const filteredTeams = useMemo(() => {
-    let result = teams;
-    if (selectedTeamTypeFilter !== "all") {
-      result = result.filter(t => t.type === selectedTeamTypeFilter);
-    }
+    // Start with only poda teams
+    let result = teams.filter(t => t.type === selectedTeamTypeFilter);
     if (selectedSupervisorFilter !== "all" && supervisorTeamIds.length > 0) {
       result = result.filter(t => supervisorTeamIds.includes(t.id));
     }
@@ -272,6 +274,11 @@ export function ProductivityTab() {
     }
     return result;
   }, [teams, selectedTeamTypeFilter, selectedSupervisorFilter, supervisorTeamIds, selectedTeamFilter]);
+
+  // Calculate goal line value: 15 anomalies × number of poda teams shown
+  const goalLineValue = useMemo(() => {
+    return filteredTeams.length * PODA_GOAL_PER_TEAM;
+  }, [filteredTeams.length]);
 
   // Group entries by team for table display
   const entriesByTeam = useMemo(() => {
@@ -521,20 +528,6 @@ export function ProductivityTab() {
           </Select>
         )}
 
-        <Select value={selectedTeamTypeFilter} onValueChange={setSelectedTeamTypeFilter}>
-          <SelectTrigger className="w-[150px]">
-            <Filter className="mr-2 h-4 w-4" />
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos Tipos</SelectItem>
-            {Object.entries(TEAM_TYPE_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
 
         <Select value={selectedTeamFilter} onValueChange={setSelectedTeamFilter}>
           <SelectTrigger className="w-[160px]">
@@ -863,6 +856,20 @@ export function ProductivityTab() {
                           wrapperStyle={{ paddingTop: 20 }}
                           iconType="line"
                           iconSize={16}
+                        />
+                        {/* Goal Reference Line - Meta de Produtividade */}
+                        <ReferenceLine 
+                          y={goalLineValue} 
+                          stroke={PRODUCTIVITY_COLORS.meta}
+                          strokeWidth={2}
+                          strokeDasharray="8 4"
+                          label={{ 
+                            value: `Meta: ${goalLineValue}`, 
+                            position: 'right',
+                            fill: PRODUCTIVITY_COLORS.meta,
+                            fontSize: 11,
+                            fontWeight: 600
+                          }}
                         />
                         <Line 
                           type="monotone"

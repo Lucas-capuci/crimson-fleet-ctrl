@@ -268,7 +268,7 @@ export default function Production() {
         <Tabs defaultValue="producao" className="w-full">
           <TabsList className="tabs-mobile">
             <TabsTrigger value="producao">Produção</TabsTrigger>
-            <TabsTrigger value="produtividade">Produtividade</TabsTrigger>
+            <TabsTrigger value="produtividade">Produtividade de Poda</TabsTrigger>
           </TabsList>
           
           <TabsContent value="producao" className="space-y-6 mt-4">
