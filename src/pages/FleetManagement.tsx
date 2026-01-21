@@ -107,6 +107,35 @@ const vehicleStatusConfig: Record<VehicleStatus, { label: string; className: str
 // ==================== WORKSHOP TYPES ====================
 type MaintenanceStatus = "pendente" | "em_andamento" | "concluida";
 
+type ReasonType = "Implemento" | "Mecânico" | "Elétrico";
+
+const REASON_TYPES: ReasonType[] = ["Implemento", "Mecânico", "Elétrico"];
+
+const WORKSHOP_NAMES = [
+  "HidrauAgri",
+  "HidrauWetec",
+  "SETEC",
+  "POLINOX",
+  "Flach",
+  "Centro Oeste",
+  "Rio Preto",
+  "Dois Irmãos",
+  "Delta Diesel",
+  "BM Suspensões",
+  "Alternativa Pneus",
+  "E-Force",
+  "JJMT",
+  "TECMARQUES",
+];
+
+interface WorkshopAttachment {
+  id: string;
+  workshop_entry_id: string;
+  file_url: string;
+  file_name: string;
+  file_type: string;
+}
+
 interface WorkshopEntry {
   id: string;
   vehicle_id: string;
@@ -114,6 +143,9 @@ interface WorkshopEntry {
   exit_date: string | null;
   predicted_exit_date: string | null;
   reason: string;
+  reason_type: string | null;
+  workshop_name: string | null;
+  maintenance_cost: number | null;
   status: MaintenanceStatus;
   notes: string | null;
   vehicles?: {
@@ -170,6 +202,7 @@ const FleetManagement = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<WorkshopEntry | null>(null);
   const [exitDate, setExitDate] = useState("");
+  const [exitMaintenanceCost, setExitMaintenanceCost] = useState("");
   const [plateSearchOpen, setPlateSearchOpen] = useState(false);
   const [plateSearch, setPlateSearch] = useState("");
   const [workshopFormData, setWorkshopFormData] = useState({
@@ -177,15 +210,28 @@ const FleetManagement = () => {
     entry_date: new Date().toISOString().split("T")[0],
     predicted_exit_date: "",
     reason: "",
+    reason_type: "",
+    workshop_name: "",
+    maintenance_cost: "",
     notes: "",
   });
   const [editFormData, setEditFormData] = useState({
     entry_date: "",
     predicted_exit_date: "",
     reason: "",
+    reason_type: "",
+    workshop_name: "",
+    maintenance_cost: "",
     notes: "",
     status: "em_andamento" as MaintenanceStatus,
   });
+  const [workshopFiles, setWorkshopFiles] = useState<File[]>([]);
+  const [existingWorkshopAttachments, setExistingWorkshopAttachments] = useState<WorkshopAttachment[]>([]);
+  const [isUploadingWorkshopFiles, setIsUploadingWorkshopFiles] = useState(false);
+  const workshopFileInputRef = useRef<HTMLInputElement>(null);
+  const [isViewWorkshopAttachmentsOpen, setIsViewWorkshopAttachmentsOpen] = useState(false);
+  const [viewingWorkshopAttachments, setViewingWorkshopAttachments] = useState<WorkshopAttachment[]>([]);
+  const [viewingWorkshopVehicle, setViewingWorkshopVehicle] = useState("");
 
   // ==================== DRIVERS STATE ====================
   const [driverSearchTerm, setDriverSearchTerm] = useState("");
@@ -382,6 +428,82 @@ const FleetManagement = () => {
     window.open(url, '_blank');
   };
 
+  // ==================== WORKSHOP FILE HELPERS ====================
+  const uploadWorkshopFiles = async (workshopEntryId: string, files: File[]) => {
+    const uploadedAttachments: { file_url: string; file_name: string; file_type: string }[] = [];
+    
+    for (const file of files) {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `workshop/${workshopEntryId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('fleet-files')
+        .upload(fileName, file);
+      
+      if (uploadError) throw uploadError;
+      
+      const { data: urlData } = supabase.storage.from('fleet-files').getPublicUrl(fileName);
+      
+      uploadedAttachments.push({
+        file_url: urlData.publicUrl,
+        file_name: file.name,
+        file_type: file.type,
+      });
+    }
+    
+    return uploadedAttachments;
+  };
+
+  const handleWorkshopFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const totalFiles = workshopFiles.length + existingWorkshopAttachments.length + files.length;
+    
+    if (totalFiles > 4) {
+      toast({
+        title: "Limite de arquivos excedido",
+        description: "Você pode anexar no máximo 4 documentos por entrada.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setWorkshopFiles(prev => [...prev, ...files]);
+    if (workshopFileInputRef.current) {
+      workshopFileInputRef.current.value = '';
+    }
+  };
+
+  const removeWorkshopFile = (index: number) => {
+    setWorkshopFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const removeExistingWorkshopAttachment = async (attachment: WorkshopAttachment) => {
+    try {
+      const { error } = await supabase
+        .from("workshop_attachments")
+        .delete()
+        .eq("id", attachment.id);
+      
+      if (error) throw error;
+      
+      setExistingWorkshopAttachments(prev => prev.filter(a => a.id !== attachment.id));
+      toast({ title: "Arquivo removido com sucesso!" });
+    } catch (error: any) {
+      toast({ title: "Erro ao remover arquivo", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const openViewWorkshopAttachments = async (entry: WorkshopEntry) => {
+    const { data: attachments } = await supabase
+      .from("workshop_attachments")
+      .select("*")
+      .eq("workshop_entry_id", entry.id);
+    
+    setViewingWorkshopAttachments(attachments || []);
+    setViewingWorkshopVehicle(entry.vehicles?.plate || "");
+    setIsViewWorkshopAttachmentsOpen(true);
+  };
+
   // ==================== VEHICLE MUTATIONS ====================
   const createVehicle = useMutation({
     mutationFn: async (data: { plate: string; model: string; team_id: string; status: VehicleStatus; gerencia: string }) => {
@@ -482,18 +604,37 @@ const FleetManagement = () => {
   const createWorkshopEntry = useMutation({
     mutationFn: async (data: typeof workshopFormData) => {
       if (!data.vehicle_id) throw new Error("Veículo não selecionado");
+      if (!data.reason_type) throw new Error("Tipo de motivo é obrigatório");
+      if (!data.workshop_name) throw new Error("Oficina é obrigatória");
       
-      const { error } = await supabase.from("workshop_entries").insert({
+      setIsUploadingWorkshopFiles(true);
+      
+      const { data: entryData, error } = await supabase.from("workshop_entries").insert({
         vehicle_id: data.vehicle_id,
         entry_date: new Date(data.entry_date).toISOString(),
         predicted_exit_date: data.predicted_exit_date ? new Date(data.predicted_exit_date).toISOString() : null,
         reason: data.reason,
+        reason_type: data.reason_type,
+        workshop_name: data.workshop_name,
+        maintenance_cost: data.maintenance_cost ? parseFloat(data.maintenance_cost) : null,
         notes: data.notes || null,
         status: "em_andamento" as MaintenanceStatus,
-      });
+      }).select().single();
       if (error) throw error;
       
+      // Upload files if any
+      if (workshopFiles.length > 0) {
+        const attachments = await uploadWorkshopFiles(entryData.id, workshopFiles);
+        for (const attachment of attachments) {
+          await supabase.from("workshop_attachments").insert({
+            workshop_entry_id: entryData.id,
+            ...attachment,
+          });
+        }
+      }
+      
       await supabase.from("vehicles").update({ status: "oficina" }).eq("id", data.vehicle_id);
+      setIsUploadingWorkshopFiles(false);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workshop_entries"] });
@@ -502,42 +643,65 @@ const FleetManagement = () => {
       resetWorkshopForm();
     },
     onError: (error) => {
+      setIsUploadingWorkshopFiles(false);
       toast({ title: "Erro ao registrar entrada", description: error.message, variant: "destructive" });
     },
   });
 
   const updateWorkshopEntry = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: typeof editFormData }) => {
+      setIsUploadingWorkshopFiles(true);
+      
       const { error } = await supabase
         .from("workshop_entries")
         .update({
           entry_date: new Date(data.entry_date).toISOString(),
           predicted_exit_date: data.predicted_exit_date ? new Date(data.predicted_exit_date).toISOString() : null,
           reason: data.reason,
+          reason_type: data.reason_type || null,
+          workshop_name: data.workshop_name || null,
+          maintenance_cost: data.maintenance_cost ? parseFloat(data.maintenance_cost) : null,
           notes: data.notes || null,
           status: data.status,
         })
         .eq("id", id);
       if (error) throw error;
+      
+      // Upload new files if any
+      if (workshopFiles.length > 0) {
+        const attachments = await uploadWorkshopFiles(id, workshopFiles);
+        for (const attachment of attachments) {
+          await supabase.from("workshop_attachments").insert({
+            workshop_entry_id: id,
+            ...attachment,
+          });
+        }
+      }
+      
+      setIsUploadingWorkshopFiles(false);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workshop_entries"] });
       toast({ title: "Entrada atualizada!" });
       setIsEditDialogOpen(false);
       setSelectedEntry(null);
+      setWorkshopFiles([]);
+      setExistingWorkshopAttachments([]);
     },
     onError: (error) => {
+      setIsUploadingWorkshopFiles(false);
       toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
     },
   });
 
   const registerExit = useMutation({
-    mutationFn: async ({ entry, exitDate }: { entry: WorkshopEntry; exitDate: string }) => {
+    mutationFn: async ({ entry, exitDate, maintenanceCost }: { entry: WorkshopEntry; exitDate: string; maintenanceCost: number }) => {
       const { error } = await supabase
         .from("workshop_entries")
         .update({ 
           status: "concluida" as MaintenanceStatus, 
-          exit_date: new Date(exitDate).toISOString() 
+          exit_date: new Date(exitDate).toISOString(),
+          maintenance_cost: maintenanceCost,
         })
         .eq("id", entry.id);
       if (error) throw error;
@@ -551,6 +715,7 @@ const FleetManagement = () => {
       setIsExitDialogOpen(false);
       setSelectedEntry(null);
       setExitDate("");
+      setExitMaintenanceCost("");
     },
     onError: (error) => {
       toast({ title: "Erro ao registrar saída", description: error.message, variant: "destructive" });
@@ -754,26 +919,49 @@ const FleetManagement = () => {
 
   const handleExitSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!exitMaintenanceCost || parseFloat(exitMaintenanceCost) < 0) {
+      toast({
+        title: "Valor da manutenção obrigatório",
+        description: "É necessário informar o valor da manutenção para registrar a saída do veículo.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (selectedEntry && exitDate) {
-      registerExit.mutate({ entry: selectedEntry, exitDate });
+      registerExit.mutate({ 
+        entry: selectedEntry, 
+        exitDate, 
+        maintenanceCost: parseFloat(exitMaintenanceCost) 
+      });
     }
   };
 
   const openExitDialog = (entry: WorkshopEntry) => {
     setSelectedEntry(entry);
     setExitDate(new Date().toISOString().split("T")[0]);
+    setExitMaintenanceCost(entry.maintenance_cost?.toString() || "");
     setIsExitDialogOpen(true);
   };
 
-  const openEditDialog = (entry: WorkshopEntry) => {
+  const openEditDialog = async (entry: WorkshopEntry) => {
     setSelectedEntry(entry);
     setEditFormData({
       entry_date: new Date(entry.entry_date).toISOString().split("T")[0],
       predicted_exit_date: entry.predicted_exit_date ? new Date(entry.predicted_exit_date).toISOString().split("T")[0] : "",
       reason: entry.reason,
+      reason_type: entry.reason_type || "",
+      workshop_name: entry.workshop_name || "",
+      maintenance_cost: entry.maintenance_cost?.toString() || "",
       notes: entry.notes || "",
       status: entry.status,
     });
+    // Load existing attachments
+    const { data: attachments } = await supabase
+      .from("workshop_attachments")
+      .select("*")
+      .eq("workshop_entry_id", entry.id);
+    setExistingWorkshopAttachments(attachments || []);
+    setWorkshopFiles([]);
     setIsEditDialogOpen(true);
   };
 
@@ -789,9 +977,14 @@ const FleetManagement = () => {
       vehicle_id: "", 
       entry_date: new Date().toISOString().split("T")[0],
       predicted_exit_date: "",
-      reason: "", 
-      notes: "" 
+      reason: "",
+      reason_type: "",
+      workshop_name: "",
+      maintenance_cost: "",
+      notes: "",
     });
+    setWorkshopFiles([]);
+    setExistingWorkshopAttachments([]);
     setPlateSearch("");
     setIsWorkshopDialogOpen(false);
   };
@@ -857,9 +1050,29 @@ const FleetManagement = () => {
           </span>
         </div>
         
-        <p className="text-sm text-foreground mb-4">{entry.reason}</p>
+        {/* Reason Type and Workshop badges */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {entry.reason_type && (
+            <span className="px-2 py-1 rounded-md text-xs font-medium bg-blue-500/20 text-blue-700">
+              {entry.reason_type}
+            </span>
+          )}
+          {entry.workshop_name && (
+            <span className="px-2 py-1 rounded-md text-xs font-medium bg-purple-500/20 text-purple-700">
+              {entry.workshop_name}
+            </span>
+          )}
+        </div>
+        
+        <p className="text-sm text-foreground mb-2">{entry.reason}</p>
         {entry.notes && (
-          <p className="text-sm text-muted-foreground mb-4">{entry.notes}</p>
+          <p className="text-sm text-muted-foreground mb-3">{entry.notes}</p>
+        )}
+        
+        {entry.maintenance_cost !== null && entry.maintenance_cost > 0 && (
+          <p className="text-sm font-medium text-green-600 mb-3">
+            Valor: R$ {entry.maintenance_cost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+          </p>
         )}
         
         <div className="flex items-center justify-between pt-4 border-t border-border">
@@ -885,13 +1098,18 @@ const FleetManagement = () => {
               <span className="font-medium text-primary">Tempo parado: {downtime}</span>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => openEditDialog(entry)} className="gap-2">
-              <Edit className="h-4 w-4" />
-              Editar
-            </Button>
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" onClick={() => openViewWorkshopAttachments(entry)} title="Ver anexos">
+                <Paperclip className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openEditDialog(entry)} className="gap-1">
+                <Edit className="h-4 w-4" />
+                Editar
+              </Button>
+            </div>
             {entry.status !== "concluida" && (
-              <Button size="sm" onClick={() => openExitDialog(entry)} className="gap-2">
+              <Button size="sm" onClick={() => openExitDialog(entry)} className="gap-1">
                 <LogOut className="h-4 w-4" />
                 Registrar Saída
               </Button>
@@ -1309,10 +1527,10 @@ const FleetManagement = () => {
                 filename={`oficina-${new Date().toISOString().split('T')[0]}`}
                 columns={workshopCsvColumns}
               />
-              <DialogContent className="max-w-lg">
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Registrar Entrada na Oficina</DialogTitle>
-                  <DialogDescription>Selecione o veículo e informe a data de entrada</DialogDescription>
+                  <DialogDescription>Selecione o veículo e informe os dados da entrada</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleWorkshopSubmit} className="space-y-4">
                   <div className="space-y-2">
@@ -1388,14 +1606,64 @@ const FleetManagement = () => {
                       />
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="reason_type">Tipo de Motivo *</Label>
+                      <Select
+                        value={workshopFormData.reason_type}
+                        onValueChange={(value) => setWorkshopFormData({ ...workshopFormData, reason_type: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {REASON_TYPES.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="workshop_name">Oficina *</Label>
+                      <Select
+                        value={workshopFormData.workshop_name}
+                        onValueChange={(value) => setWorkshopFormData({ ...workshopFormData, workshop_name: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {WORKSHOP_NAMES.map((name) => (
+                            <SelectItem key={name} value={name}>
+                              {name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <Label htmlFor="reason">Motivo da Entrada</Label>
+                    <Label htmlFor="reason">Descrição do Problema</Label>
                     <Input
                       id="reason"
                       value={workshopFormData.reason}
                       onChange={(e) => setWorkshopFormData({ ...workshopFormData, reason: e.target.value })}
-                      placeholder="Descreva o motivo..."
+                      placeholder="Descreva o problema..."
                       required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="maintenance_cost">Valor da Manutenção (opcional)</Label>
+                    <Input
+                      id="maintenance_cost"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={workshopFormData.maintenance_cost}
+                      onChange={(e) => setWorkshopFormData({ ...workshopFormData, maintenance_cost: e.target.value })}
+                      placeholder="R$ 0,00"
                     />
                   </div>
                   <div className="space-y-2">
@@ -1405,15 +1673,61 @@ const FleetManagement = () => {
                       value={workshopFormData.notes}
                       onChange={(e) => setWorkshopFormData({ ...workshopFormData, notes: e.target.value })}
                       placeholder="Observações adicionais..."
-                      rows={3}
+                      rows={2}
                     />
                   </div>
+                  
+                  {/* File Upload Section */}
+                  <div className="space-y-2">
+                    <Label>Anexos (máx. 4)</Label>
+                    <input
+                      ref={workshopFileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*,video/*,.pdf,.doc,.docx"
+                      onChange={handleWorkshopFileSelect}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full gap-2"
+                      onClick={() => workshopFileInputRef.current?.click()}
+                      disabled={workshopFiles.length >= 4}
+                    >
+                      <Upload className="h-4 w-4" />
+                      Anexar Arquivos ({workshopFiles.length}/4)
+                    </Button>
+                    
+                    {workshopFiles.length > 0 && (
+                      <div className="space-y-2 mt-2">
+                        {workshopFiles.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between bg-muted/50 rounded-lg p-2">
+                            <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
+                              {getFileIcon(file.type)}
+                              <span className="text-sm truncate">{file.name}</span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 shrink-0"
+                              onClick={() => removeWorkshopFile(index)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
                   <div className="flex justify-end gap-3 pt-4">
                     <Button type="button" variant="outline" onClick={resetWorkshopForm}>
                       Cancelar
                     </Button>
-                    <Button type="submit" disabled={createWorkshopEntry.isPending || !workshopFormData.vehicle_id}>
-                      Registrar
+                    <Button type="submit" disabled={createWorkshopEntry.isPending || isUploadingWorkshopFiles || !workshopFormData.vehicle_id || !workshopFormData.reason_type || !workshopFormData.workshop_name}>
+                      {isUploadingWorkshopFiles ? "Enviando..." : "Registrar"}
                     </Button>
                   </div>
                 </form>
@@ -1422,7 +1736,7 @@ const FleetManagement = () => {
 
             {/* Edit Dialog */}
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-              <DialogContent className="max-w-lg">
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Editar Entrada</DialogTitle>
                   <DialogDescription>
@@ -1454,14 +1768,64 @@ const FleetManagement = () => {
                       />
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit_reason_type">Tipo de Motivo</Label>
+                      <Select
+                        value={editFormData.reason_type}
+                        onValueChange={(value) => setEditFormData({ ...editFormData, reason_type: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {REASON_TYPES.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit_workshop_name">Oficina</Label>
+                      <Select
+                        value={editFormData.workshop_name}
+                        onValueChange={(value) => setEditFormData({ ...editFormData, workshop_name: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {WORKSHOP_NAMES.map((name) => (
+                            <SelectItem key={name} value={name}>
+                              {name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <Label htmlFor="edit_reason">Motivo da Entrada</Label>
+                    <Label htmlFor="edit_reason">Descrição do Problema</Label>
                     <Input
                       id="edit_reason"
                       value={editFormData.reason}
                       onChange={(e) => setEditFormData({ ...editFormData, reason: e.target.value })}
-                      placeholder="Descreva o motivo..."
+                      placeholder="Descreva o problema..."
                       required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_maintenance_cost">Valor da Manutenção</Label>
+                    <Input
+                      id="edit_maintenance_cost"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editFormData.maintenance_cost}
+                      onChange={(e) => setEditFormData({ ...editFormData, maintenance_cost: e.target.value })}
+                      placeholder="R$ 0,00"
                     />
                   </div>
                   <div className="space-y-2">
@@ -1471,15 +1835,110 @@ const FleetManagement = () => {
                       value={editFormData.notes}
                       onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
                       placeholder="Observações adicionais..."
-                      rows={3}
+                      rows={2}
                     />
                   </div>
+                  
+                  {/* File Upload Section */}
+                  <div className="space-y-2">
+                    <Label>Anexos (máx. 4)</Label>
+                    <input
+                      ref={workshopFileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*,video/*,.pdf,.doc,.docx"
+                      onChange={handleWorkshopFileSelect}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full gap-2"
+                      onClick={() => workshopFileInputRef.current?.click()}
+                      disabled={workshopFiles.length + existingWorkshopAttachments.length >= 4}
+                    >
+                      <Upload className="h-4 w-4" />
+                      Anexar Arquivos ({workshopFiles.length + existingWorkshopAttachments.length}/4)
+                    </Button>
+                    
+                    {/* Existing attachments */}
+                    {existingWorkshopAttachments.length > 0 && (
+                      <div className="space-y-2 mt-2">
+                        <p className="text-xs text-muted-foreground">Arquivos existentes:</p>
+                        {existingWorkshopAttachments.map((attachment) => (
+                          <div key={attachment.id} className="flex items-center justify-between bg-muted/50 rounded-lg p-2">
+                            <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
+                              {getFileIcon(attachment.file_type)}
+                              <span className="text-sm truncate">{attachment.file_name}</span>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleViewFile(attachment.file_url)}
+                                title="Visualizar"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleDownloadFile(attachment.file_url, attachment.file_name)}
+                                title="Baixar"
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => removeExistingWorkshopAttachment(attachment)}
+                                title="Remover"
+                              >
+                                <X className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* New files to upload */}
+                    {workshopFiles.length > 0 && (
+                      <div className="space-y-2 mt-2">
+                        <p className="text-xs text-muted-foreground">Novos arquivos:</p>
+                        {workshopFiles.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between bg-muted/50 rounded-lg p-2">
+                            <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
+                              {getFileIcon(file.type)}
+                              <span className="text-sm truncate">{file.name}</span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 shrink-0"
+                              onClick={() => removeWorkshopFile(index)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
                   <div className="flex justify-end gap-3 pt-4">
                     <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                       Cancelar
                     </Button>
-                    <Button type="submit" disabled={updateWorkshopEntry.isPending}>
-                      Salvar
+                    <Button type="submit" disabled={updateWorkshopEntry.isPending || isUploadingWorkshopFiles}>
+                      {isUploadingWorkshopFiles ? "Enviando..." : "Salvar"}
                     </Button>
                   </div>
                 </form>
@@ -1508,15 +1967,84 @@ const FleetManagement = () => {
                       required
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="exit_maintenance_cost">Valor da Manutenção *</Label>
+                    <Input
+                      id="exit_maintenance_cost"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={exitMaintenanceCost}
+                      onChange={(e) => setExitMaintenanceCost(e.target.value)}
+                      placeholder="R$ 0,00"
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      O valor da manutenção é obrigatório para registrar a saída
+                    </p>
+                  </div>
                   <div className="flex justify-end gap-3 pt-4">
                     <Button type="button" variant="outline" onClick={() => setIsExitDialogOpen(false)}>
                       Cancelar
                     </Button>
-                    <Button type="submit" disabled={registerExit.isPending || !exitDate}>
+                    <Button type="submit" disabled={registerExit.isPending || !exitDate || !exitMaintenanceCost}>
                       Confirmar Saída
                     </Button>
                   </div>
                 </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* View Workshop Attachments Dialog */}
+            <Dialog open={isViewWorkshopAttachmentsOpen} onOpenChange={setIsViewWorkshopAttachmentsOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Paperclip className="h-5 w-5" />
+                    Anexos - {viewingWorkshopVehicle}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Visualize e baixe os documentos anexados a esta entrada
+                  </DialogDescription>
+                </DialogHeader>
+                {viewingWorkshopAttachments.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Nenhum anexo encontrado para esta entrada
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {viewingWorkshopAttachments.map((attachment) => (
+                      <div key={attachment.id} className="flex items-center justify-between bg-muted/50 rounded-lg p-3">
+                        <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
+                          <div className="p-2 rounded-lg bg-primary/10">
+                            {getFileIcon(attachment.file_type)}
+                          </div>
+                          <span className="text-sm font-medium truncate">{attachment.file_name}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => handleViewFile(attachment.file_url)}
+                          >
+                            <Eye className="h-4 w-4" />
+                            Ver
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => handleDownloadFile(attachment.file_url, attachment.file_name)}
+                          >
+                            <Download className="h-4 w-4" />
+                            Baixar
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </DialogContent>
             </Dialog>
           </div>
