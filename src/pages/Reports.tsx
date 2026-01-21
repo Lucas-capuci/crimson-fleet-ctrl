@@ -31,7 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   FileText,
@@ -44,6 +44,8 @@ import {
   Settings,
   Trash2,
   Edit,
+  Calendar,
+  TrendingUp,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
@@ -56,8 +58,21 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
+  LineChart,
+  Line,
+  CartesianGrid,
+  Legend,
 } from "recharts";
 import { ExportButton } from "@/components/ExportButton";
+import { ScoringRulesExplainer } from "@/components/reports/ScoringRulesExplainer";
+import {
+  calculateAllDailyScores,
+  calculateAggregatedScores,
+  calculateRankingForPeriod,
+  type ReportEntry,
+  type DailyScore,
+  type AggregatedScore,
+} from "@/lib/scoringCalculations";
 
 type ReportStatus = "NO_HORARIO" | "FORA_DO_HORARIO" | "ESQUECEU_ERRO";
 
@@ -82,14 +97,7 @@ interface ControleDiario {
   observacao: string | null;
 }
 
-interface RankingPontos {
-  responsavel: string;
-  total_pontos: number;
-  quantidade_no_horario: number;
-  quantidade_fora_do_horario: number;
-  quantidade_erros: number;
-  total_registros: number;
-}
+// RankingPontos interface removed - using normalized scoring instead
 
 export default function Reports() {
   const { userRole } = useAuth();
@@ -101,6 +109,7 @@ export default function Reports() {
   const [filterEndDate, setFilterEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [filterResponsavel, setFilterResponsavel] = useState<string>("all");
   const [filterTipoRelatorio, setFilterTipoRelatorio] = useState<string>("all");
+  const [rankingPeriod, setRankingPeriod] = useState<"week" | "month" | "all">("month");
   
   // Form state
   const [formData, setFormData] = useState({
@@ -168,17 +177,45 @@ export default function Reports() {
     },
   });
 
-  // Fetch ranking
-  const { data: ranking = [] } = useQuery<RankingPontos[]>({
-    queryKey: ["ranking-pontos"],
+  // Fetch ALL entries for normalized ranking calculation
+  const { data: allEntries = [] } = useQuery<ReportEntry[]>({
+    queryKey: ["all-controle-diario"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("ranking_pontos")
-        .select("*");
+        .from("controle_diario")
+        .select("responsavel, data, tipo_relatorio, status, pontos_calculados")
+        .order("data", { ascending: false });
       if (error) throw error;
-      return data as RankingPontos[];
+      return data as ReportEntry[];
     },
   });
+
+  // Calculate normalized rankings based on selected period
+  const normalizedRanking = useMemo((): AggregatedScore[] => {
+    if (allEntries.length === 0 || configs.length === 0) return [];
+    
+    const today = new Date();
+    let startDate: string | undefined;
+    
+    if (rankingPeriod === "week") {
+      startDate = format(startOfWeek(today, { locale: ptBR }), "yyyy-MM-dd");
+    } else if (rankingPeriod === "month") {
+      startDate = format(startOfMonth(today), "yyyy-MM-dd");
+    }
+    
+    return calculateRankingForPeriod(allEntries, configs, startDate);
+  }, [allEntries, configs, rankingPeriod]);
+
+  // Calculate daily scores for chart
+  const dailyScoresForChart = useMemo((): DailyScore[] => {
+    if (allEntries.length === 0 || configs.length === 0) return [];
+    
+    const today = new Date();
+    const thirtyDaysAgo = format(subDays(today, 30), "yyyy-MM-dd");
+    const filteredEntries = allEntries.filter(e => e.data >= thirtyDaysAgo);
+    
+    return calculateAllDailyScores(filteredEntries, configs);
+  }, [allEntries, configs]);
 
   // Get all unique responsaveis from configs
   const allResponsaveis = useMemo(() => {
@@ -381,9 +418,10 @@ export default function Reports() {
     }
   };
 
-  const chartData = ranking.map((r) => ({
+  const chartData = normalizedRanking.map((r) => ({
     name: r.responsavel,
-    pontos: r.total_pontos,
+    pontos: r.totalNormalizedScore,
+    media: r.averageDailyScore,
   }));
 
   const controleCsvColumns = [
@@ -803,18 +841,53 @@ export default function Reports() {
             </Card>
           </TabsContent>
 
-          {/* Tab Ranking */}
           <TabsContent value="ranking">
+            {/* Scoring Rules Explainer */}
+            <div className="mb-6">
+              <ScoringRulesExplainer />
+            </div>
+
+            {/* Period Selector */}
+            <div className="flex flex-wrap items-center gap-4 mb-6">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Período:</span>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant={rankingPeriod === "week" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setRankingPeriod("week")}
+                >
+                  Esta Semana
+                </Button>
+                <Button
+                  variant={rankingPeriod === "month" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setRankingPeriod("month")}
+                >
+                  Este Mês
+                </Button>
+                <Button
+                  variant={rankingPeriod === "all" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setRankingPeriod("all")}
+                >
+                  Todo Período
+                </Button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Trophy className="h-5 w-5 text-yellow-500" />
-                    Ranking de Pontos
+                    Ranking Normalizado
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {ranking.length === 0 ? (
+                  {normalizedRanking.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">
                       Nenhum dado disponível ainda.
                     </p>
@@ -828,11 +901,13 @@ export default function Reports() {
                             <TableHead className="text-center">No Horário</TableHead>
                             <TableHead className="text-center">Fora</TableHead>
                             <TableHead className="text-center">Erros</TableHead>
+                            <TableHead className="text-center">Dias</TableHead>
+                            <TableHead className="text-right">Média/Dia</TableHead>
                             <TableHead className="text-right">Total</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {ranking.map((r, index) => (
+                          {normalizedRanking.map((r, index) => (
                             <TableRow key={r.responsavel}>
                               <TableCell>
                                 {index === 0 && "🥇"}
@@ -842,17 +917,25 @@ export default function Reports() {
                               </TableCell>
                               <TableCell className="font-medium">{r.responsavel}</TableCell>
                               <TableCell className="text-center text-green-600">
-                                {r.quantidade_no_horario}
+                                {r.totalOnTime}
                               </TableCell>
                               <TableCell className="text-center text-yellow-600">
-                                {r.quantidade_fora_do_horario}
+                                {r.totalLate}
                               </TableCell>
                               <TableCell className="text-center text-red-600">
-                                {r.quantidade_erros}
+                                {r.totalErrors}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {r.totalDays}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <span className={r.averageDailyScore >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {r.averageDailyScore > 0 ? "+" : ""}{r.averageDailyScore.toFixed(2)}
+                                </span>
                               </TableCell>
                               <TableCell className="text-right font-bold">
-                                <span className={r.total_pontos >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {r.total_pontos > 0 ? "+" : ""}{r.total_pontos}
+                                <span className={r.totalNormalizedScore >= 0 ? "text-green-600" : "text-red-600"}>
+                                  {r.totalNormalizedScore > 0 ? "+" : ""}{r.totalNormalizedScore.toFixed(2)}
                                 </span>
                               </TableCell>
                             </TableRow>
@@ -866,27 +949,33 @@ export default function Reports() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Gráfico de Pontuação</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" />
+                    Gráfico de Pontuação
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {ranking.length === 0 ? (
+                  {normalizedRanking.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">
                       Nenhum dado disponível ainda.
                     </p>
                   ) : (
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={chartData} layout="vertical" margin={{ left: 60, right: 20 }}>
-                        <XAxis type="number" />
+                        <XAxis type="number" domain={['auto', 'auto']} />
                         <YAxis type="category" dataKey="name" width={80} />
                         <Tooltip
-                          formatter={(value: number) => [value, "Pontos"]}
+                          formatter={(value: number, name: string) => [
+                            value.toFixed(2),
+                            name === "pontos" ? "Total" : "Média/Dia"
+                          ]}
                           contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
                         />
-                        <Bar dataKey="pontos" radius={[0, 4, 4, 0]}>
+                        <Bar dataKey="pontos" name="Total" radius={[0, 4, 4, 0]}>
                           {chartData.map((entry, index) => (
                             <Cell
                               key={`cell-${index}`}
-                              fill={entry.pontos >= 0 ? "hsl(var(--success))" : "hsl(var(--destructive))"}
+                              fill={entry.pontos >= 0 ? "hsl(142, 76%, 36%)" : "hsl(0, 84%, 60%)"}
                             />
                           ))}
                         </Bar>
@@ -896,6 +985,53 @@ export default function Reports() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Daily Evolution Chart */}
+            {dailyScoresForChart.length > 0 && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" />
+                    Evolução Diária (Últimos 30 dias)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart
+                      data={dailyScoresForChart
+                        .sort((a, b) => a.data.localeCompare(b.data))
+                        .slice(-30)}
+                      margin={{ left: 20, right: 20, top: 10, bottom: 10 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis 
+                        dataKey="data" 
+                        tickFormatter={(value) => format(new Date(value + "T12:00:00"), "dd/MM")}
+                        fontSize={12}
+                      />
+                      <YAxis domain={[-20, 20]} />
+                      <Tooltip
+                        labelFormatter={(value) => format(new Date(value + "T12:00:00"), "dd/MM/yyyy")}
+                        formatter={(value: number, name: string) => [
+                          `${value.toFixed(2)} pts`,
+                          name
+                        ]}
+                        contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                      />
+                      <Legend />
+                      <Line
+                        type="monotone"
+                        dataKey="normalizedScore"
+                        name="Pontuação"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                        dot={{ fill: "hsl(var(--primary))", r: 3 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </div>
