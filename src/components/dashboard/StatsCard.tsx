@@ -22,8 +22,8 @@ const accentColors = {
 };
 
 const iconBgColors = {
-  default: "bg-primary/10",
-  primary: "bg-primary/10",
+  default: "bg-primary/8",
+  primary: "bg-primary/8",
   success: "bg-success/10",
   warning: "bg-warning/10",
   destructive: "bg-destructive/10",
@@ -51,25 +51,27 @@ export function StatsCard({
     <div
       onClick={onClick}
       className={cn(
-        "stats-card p-5 sm:p-6 animate-fade-in",
+        "bg-card rounded-2xl border border-border p-6 relative overflow-hidden",
+        "shadow-premium transition-all duration-200 ease-in-out",
+        "hover:shadow-premium-hover hover:-translate-y-0.5",
         isClickable && "cursor-pointer"
       )}
     >
       {/* Accent bar */}
-      <div className={cn("stats-card-accent rounded-t-2xl", accentColors[variant])} />
+      <div className={cn("absolute top-0 left-0 right-0 h-1 rounded-t-2xl", accentColors[variant])} />
       
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1.5 min-w-0 flex-1">
-          <p className="text-sm font-medium text-muted-foreground truncate">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-2 min-w-0 flex-1">
+          <p className="text-caption font-medium text-muted-foreground truncate">
             {title}
           </p>
-          <p className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+          <p className="text-kpi-sm tracking-tight text-foreground">
             {value}
           </p>
           {trend && (
             <p
               className={cn(
-                "text-sm flex items-center gap-1.5 font-medium",
+                "text-caption flex items-center gap-1.5 font-medium",
                 trend.isPositive ? "text-success" : "text-destructive"
               )}
             >

@@ -22,8 +22,12 @@ export default {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
       },
       fontSize: {
-        'kpi': ['2.25rem', { lineHeight: '2.5rem', fontWeight: '700', letterSpacing: '-0.025em' }],
-        'kpi-sm': ['1.875rem', { lineHeight: '2.25rem', fontWeight: '700', letterSpacing: '-0.025em' }],
+        'kpi': ['2.5rem', { lineHeight: '2.75rem', fontWeight: '700', letterSpacing: '-0.025em' }],
+        'kpi-sm': ['2rem', { lineHeight: '2.25rem', fontWeight: '700', letterSpacing: '-0.025em' }],
+        'title': ['1.5rem', { lineHeight: '2rem', fontWeight: '600', letterSpacing: '-0.01em' }],
+        'subtitle': ['1rem', { lineHeight: '1.5rem', fontWeight: '500' }],
+        'body': ['0.875rem', { lineHeight: '1.375rem', fontWeight: '400' }],
+        'caption': ['0.8125rem', { lineHeight: '1.25rem', fontWeight: '400' }],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -94,11 +98,11 @@ export default {
         "3xl": "calc(var(--radius) + 12px)",
       },
       boxShadow: {
-        'premium': '0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04)',
-        'premium-hover': '0 8px 24px -4px rgb(0 0 0 / 0.08), 0 4px 12px -2px rgb(0 0 0 / 0.04)',
-        'elevated': '0 4px 16px -2px rgb(0 0 0 / 0.06), 0 2px 8px -2px rgb(0 0 0 / 0.03)',
-        'card': '0 1px 3px 0 rgb(0 0 0 / 0.04)',
-        'card-hover': '0 8px 24px -4px rgb(0 0 0 / 0.08)',
+        'premium': '0 1px 3px 0 rgb(0 0 0 / 0.02), 0 1px 2px -1px rgb(0 0 0 / 0.02)',
+        'premium-hover': '0 8px 24px -4px rgb(0 0 0 / 0.06), 0 4px 12px -2px rgb(0 0 0 / 0.03)',
+        'elevated': '0 4px 16px -2px rgb(0 0 0 / 0.04), 0 2px 8px -2px rgb(0 0 0 / 0.02)',
+        'card': '0 1px 3px 0 rgb(0 0 0 / 0.02)',
+        'card-hover': '0 8px 24px -4px rgb(0 0 0 / 0.06)',
       },
       spacing: {
         '18': '4.5rem',

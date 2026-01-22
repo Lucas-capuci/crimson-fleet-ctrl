@@ -78,16 +78,16 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile Header Bar */}
-      <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-sidebar flex items-center justify-between px-4 lg:hidden">
+      <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-sidebar flex items-center justify-between px-4 lg:hidden shadow-lg">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-sidebar-accent">
+          <div className="p-2 rounded-xl bg-sidebar-accent/50">
             <Truck className="h-5 w-5 text-sidebar-foreground" />
           </div>
           <h1 className="text-lg font-bold text-sidebar-foreground tracking-tight">E-Grid</h1>
         </div>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="p-2 rounded-xl bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground transition-colors"
+          className="p-2.5 rounded-xl bg-sidebar-accent/50 text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-all duration-200"
           aria-label="Toggle menu"
         >
           {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -97,7 +97,7 @@ export function Sidebar() {
       {/* Overlay for mobile */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 lg:hidden"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden transition-opacity duration-300"
           onClick={() => setIsOpen(false)}
         />
       )}
@@ -105,24 +105,24 @@ export function Sidebar() {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar transition-transform duration-300 lg:translate-x-0",
+          "fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar transition-transform duration-300 lg:translate-x-0 shadow-xl",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo - Hidden on mobile as it's in header */}
-          <div className="hidden lg:flex items-center gap-3 px-6 py-6 border-b border-sidebar-border">
-            <div className="p-2.5 rounded-xl bg-sidebar-primary">
+          <div className="hidden lg:flex items-center gap-3 px-6 py-6 border-b border-sidebar-border/50">
+            <div className="p-2.5 rounded-xl bg-sidebar-accent/50">
               <Truck className="h-6 w-6 text-sidebar-foreground" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-sidebar-foreground tracking-tight">E-Grid</h1>
-              <p className="text-xs text-sidebar-foreground/60 font-medium">Gestão Operacional</p>
+              <p className="text-xs text-sidebar-foreground/50 font-medium">Gestão Operacional</p>
             </div>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto mt-16 lg:mt-0">
+          <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto mt-16 lg:mt-0">
             {allNavItems.map((item) => (
               <NavLink
                 key={item.url}
@@ -131,7 +131,7 @@ export function Sidebar() {
                 className={cn(
                   "flex items-center gap-3 px-4 py-3 rounded-xl relative",
                   "text-sidebar-foreground/70 font-medium text-sm",
-                  "hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                  "hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
                   "transition-all duration-200 ease-in-out"
                 )}
                 activeClassName="bg-sidebar-primary text-sidebar-foreground font-semibold before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-[3px] before:h-6 before:rounded-r-full before:bg-white"
@@ -143,7 +143,7 @@ export function Sidebar() {
           </nav>
 
           {/* Footer */}
-          <div className="px-4 py-5 border-t border-sidebar-border space-y-3">
+          <div className="px-4 py-5 border-t border-sidebar-border/50 space-y-3">
             {user && (
               <div className="text-xs text-sidebar-foreground/50 truncate px-1 font-medium">
                 {user.email}
@@ -152,7 +152,7 @@ export function Sidebar() {
             <Button
               variant="ghost"
               size="sm"
-              className="w-full justify-start gap-2.5 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground font-medium"
+              className="w-full justify-start gap-2.5 text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground font-medium rounded-xl transition-all duration-200"
               onClick={() => signOut()}
             >
               <LogOut className="h-4 w-4" />
