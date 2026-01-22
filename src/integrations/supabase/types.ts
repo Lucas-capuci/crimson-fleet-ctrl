@@ -467,6 +467,7 @@ export type Database = {
           team_id: string | null
           total_value: number
           updated_at: string
+          validated_value: number | null
         }
         Insert: {
           created_at?: string
@@ -479,6 +480,7 @@ export type Database = {
           team_id?: string | null
           total_value?: number
           updated_at?: string
+          validated_value?: number | null
         }
         Update: {
           created_at?: string
@@ -491,6 +493,7 @@ export type Database = {
           team_id?: string | null
           total_value?: number
           updated_at?: string
+          validated_value?: number | null
         }
         Relationships: [
           {
