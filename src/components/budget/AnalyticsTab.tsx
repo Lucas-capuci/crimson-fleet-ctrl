@@ -8,12 +8,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { CalendarIcon, X, TrendingUp, Users, Scissors, Target, FileText, DollarSign, Package } from "lucide-react";
+import { CalendarIcon, X, TrendingUp, Users, Scissors, Target, FileText, DollarSign, Package, Download } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
+import { exportToCsv, CsvColumn, formatCurrency as formatCurrencyCsv } from "@/lib/exportCsv";
 
 interface Team {
   id: string;
@@ -58,6 +59,8 @@ interface OSEAnalytic {
   totalTrips: number;
   totalValue: number;
   teamsInvolved: string[];
+  podasCount: number;
+  espacadoresCount: number;
 }
 
 interface AnalyticsTabProps {
@@ -202,6 +205,7 @@ export function AnalyticsTab({
       const oseId = item.trip.ose_id;
       const tripId = item.trip.id;
       const teamName = item.trip.teams?.name;
+      const service = item.service;
 
       // Find the OSE data
       const ose = oses.find(o => o.id === oseId);
@@ -216,6 +220,8 @@ export function AnalyticsTab({
           totalTrips: 0,
           totalValue: 0,
           teamsInvolved: [],
+          podasCount: 0,
+          espacadoresCount: 0,
         };
         teamsByOse[oseId] = new Set();
         tripsByOse[oseId] = new Set();
@@ -223,6 +229,19 @@ export function AnalyticsTab({
 
       tripsByOse[oseId].add(tripId);
       grouped[oseId].totalValue += item.total_price;
+      
+      // Count podas (pruning)
+      if (service?.description?.toLowerCase().includes("poda") || 
+          service?.up?.toLowerCase().includes("poda")) {
+        grouped[oseId].podasCount += item.quantity;
+      }
+
+      // Count espaçadores (spacers)
+      if (service?.description?.toLowerCase().includes("espaçador") || 
+          service?.description?.toLowerCase().includes("espacador") ||
+          service?.up?.toLowerCase().includes("esp")) {
+        grouped[oseId].espacadoresCount += item.quantity;
+      }
       
       if (teamName) {
         teamsByOse[oseId].add(teamName);
@@ -237,6 +256,46 @@ export function AnalyticsTab({
 
     return Object.values(grouped).sort((a, b) => b.totalValue - a.totalValue);
   }, [allOseItems, oses]);
+
+  // CSV Export functions
+  const exportTeamsCsv = () => {
+    const columns: CsvColumn[] = [
+      { key: "teamName", header: "Equipe" },
+      { key: "totalTrips", header: "Idas" },
+      { key: "totalServices", header: "Serviços" },
+      { key: "totalQuantity", header: "Quantidade Total" },
+      { key: "podasCount", header: "Podas" },
+      { key: "espacadoresCount", header: "Espaçadores" },
+      { key: "totalValue", header: "Valor Total", format: (v) => formatCurrencyCsv(v) },
+    ];
+    exportToCsv(teamAnalytics, `analytics-equipes-${format(new Date(), "yyyy-MM-dd")}`, columns);
+  };
+
+  const exportServicesCsv = () => {
+    const columns: CsvColumn[] = [
+      { key: "up", header: "UP" },
+      { key: "description", header: "Descrição" },
+      { key: "unit", header: "Unidade" },
+      { key: "totalQuantity", header: "Qtd Total" },
+      { key: "unitPrice", header: "Preço Unitário", format: (v) => formatCurrencyCsv(v) },
+      { key: "totalValue", header: "Valor Total", format: (v) => formatCurrencyCsv(v) },
+    ];
+    exportToCsv(analyticsData, `analytics-servicos-${format(new Date(), "yyyy-MM-dd")}`, columns);
+  };
+
+  const exportOsesCsv = () => {
+    const columns: CsvColumn[] = [
+      { key: "oseNumber", header: "Nº OSE" },
+      { key: "description", header: "Descrição" },
+      { key: "status", header: "Status" },
+      { key: "teamsInvolved", header: "Equipes", format: (v) => v.join(", ") },
+      { key: "totalTrips", header: "Idas" },
+      { key: "podasCount", header: "Podas" },
+      { key: "espacadoresCount", header: "Espaçadores" },
+      { key: "totalValue", header: "Valor Total", format: (v) => formatCurrencyCsv(v) },
+    ];
+    exportToCsv(oseAnalytics, `analytics-oses-${format(new Date(), "yyyy-MM-dd")}`, columns);
+  };
 
   // Special categories analytics
   const specialCategories = useMemo(() => {
@@ -537,14 +596,22 @@ export function AnalyticsTab({
       <Card>
         <CardContent className="pt-6">
           <Tabs defaultValue="teams" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="teams">Por Equipe</TabsTrigger>
-              <TabsTrigger value="services">Por Serviço</TabsTrigger>
-              <TabsTrigger value="oses">Por OSE</TabsTrigger>
-            </TabsList>
+            <div className="flex items-center justify-between mb-4">
+              <TabsList className="grid w-auto grid-cols-3">
+                <TabsTrigger value="teams">Por Equipe</TabsTrigger>
+                <TabsTrigger value="services">Por Serviço</TabsTrigger>
+                <TabsTrigger value="oses">Por OSE</TabsTrigger>
+              </TabsList>
+            </div>
 
             {/* By Team */}
             <TabsContent value="teams" className="space-y-4 mt-4">
+              <div className="flex justify-end mb-4">
+                <Button variant="outline" size="sm" onClick={exportTeamsCsv} disabled={teamAnalytics.length === 0}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Exportar CSV
+                </Button>
+              </div>
               {teamAnalytics.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   Nenhum dado encontrado para os filtros selecionados.
@@ -674,6 +741,12 @@ export function AnalyticsTab({
 
             {/* By Service */}
             <TabsContent value="services" className="mt-4">
+              <div className="flex justify-end mb-4">
+                <Button variant="outline" size="sm" onClick={exportServicesCsv} disabled={analyticsData.length === 0}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Exportar CSV
+                </Button>
+              </div>
               {analyticsData.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   Nenhum dado encontrado para os filtros selecionados.
@@ -722,6 +795,12 @@ export function AnalyticsTab({
 
             {/* By OSE */}
             <TabsContent value="oses" className="mt-4">
+              <div className="flex justify-end mb-4">
+                <Button variant="outline" size="sm" onClick={exportOsesCsv} disabled={oseAnalytics.length === 0}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Exportar CSV
+                </Button>
+              </div>
               {oseAnalytics.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   Nenhum dado encontrado para os filtros selecionados.
@@ -736,6 +815,8 @@ export function AnalyticsTab({
                         <TableHead>Status</TableHead>
                         <TableHead>Equipes</TableHead>
                         <TableHead className="text-right">Idas</TableHead>
+                        <TableHead className="text-right">Podas</TableHead>
+                        <TableHead className="text-right">Espaçadores</TableHead>
                         <TableHead className="text-right">Valor Total</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -766,6 +847,8 @@ export function AnalyticsTab({
                             </div>
                           </TableCell>
                           <TableCell className="text-right">{ose.totalTrips}</TableCell>
+                          <TableCell className="text-right font-medium text-green-600">{ose.podasCount.toLocaleString("pt-BR")}</TableCell>
+                          <TableCell className="text-right font-medium text-blue-600">{ose.espacadoresCount.toLocaleString("pt-BR")}</TableCell>
                           <TableCell className="text-right font-bold text-primary">
                             {formatCurrency(ose.totalValue)}
                           </TableCell>

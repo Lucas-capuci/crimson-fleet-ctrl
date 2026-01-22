@@ -35,7 +35,7 @@ const navItems: NavItem[] = [
   { title: "Escala", url: "/escala", icon: CalendarDays, page: "schedule" },
   { title: "Saída", url: "/saida", icon: LogIn, page: "departures" },
   { title: "Produção", url: "/producao", icon: BarChart3, page: "production" },
-  { title: "Orçamento", url: "/orcamento", icon: FileText, page: "budget" as PageName },
+  { title: "OSE", url: "/orcamento", icon: FileText, page: "budget" as PageName },
   { title: "Relatórios", url: "/relatorios", icon: ClipboardCheck, page: "reports" as PageName, adminOnly: true },
 ];
 
