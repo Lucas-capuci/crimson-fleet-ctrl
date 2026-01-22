@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { format, parseISO, eachDayOfInterval, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -44,7 +44,7 @@ export function ValuesComparisonChart({ oses, dateFromFilter, dateToFilter }: Va
     const startDate = dateFromFilter || startOfMonth(new Date());
     const endDate = dateToFilter || endOfMonth(new Date());
     
-    // Create a map of dates to values
+    // Create a map of dates to daily values
     const dateValues: Record<string, { realized: number; validated: number }> = {};
     
     // Initialize all days with 0
@@ -54,7 +54,7 @@ export function ValuesComparisonChart({ oses, dateFromFilter, dateToFilter }: Va
       dateValues[dateKey] = { realized: 0, validated: 0 };
     });
     
-    // Aggregate OSE values by trip dates
+    // Aggregate OSE values by trip dates (daily, not accumulated)
     oses.forEach(ose => {
       if (!ose.trips || ose.trips.length === 0) return;
       
@@ -78,25 +78,15 @@ export function ValuesComparisonChart({ oses, dateFromFilter, dateToFilter }: Va
       });
     });
     
-    // Convert to array and accumulate values
-    let accumulatedRealized = 0;
-    let accumulatedValidated = 0;
-    
+    // Convert to array with daily values (no accumulation)
     return Object.entries(dateValues)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, values]) => {
-        accumulatedRealized += values.realized;
-        accumulatedValidated += values.validated;
-        
-        return {
-          date,
-          dateLabel: format(parseISO(date), "dd/MM", { locale: ptBR }),
-          realizado: Math.round(accumulatedRealized * 100) / 100,
-          validado: Math.round(accumulatedValidated * 100) / 100,
-          realizadoDia: Math.round(values.realized * 100) / 100,
-          validadoDia: Math.round(values.validated * 100) / 100,
-        };
-      });
+      .map(([date, values]) => ({
+        date,
+        dateLabel: format(parseISO(date), "dd/MM", { locale: ptBR }),
+        realizado: Math.round(values.realized * 100) / 100,
+        validado: Math.round(values.validated * 100) / 100,
+      }));
   }, [oses, dateFromFilter, dateToFilter]);
 
   // Calculate totals
@@ -130,7 +120,7 @@ export function ValuesComparisonChart({ oses, dateFromFilter, dateToFilter }: Va
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <CardTitle className="text-lg">Comparativo Realizado vs Validado</CardTitle>
-            <CardDescription>Evolução acumulada dos valores no período</CardDescription>
+            <CardDescription>Valores diários no período</CardDescription>
           </div>
           <div className="flex gap-4 text-sm">
             <div className="flex items-center gap-2">
@@ -155,7 +145,7 @@ export function ValuesComparisonChart({ oses, dateFromFilter, dateToFilter }: Va
       <CardContent>
         <div className="h-[350px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+            <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis 
                 dataKey="dateLabel" 
@@ -175,32 +165,26 @@ export function ValuesComparisonChart({ oses, dateFromFilter, dateToFilter }: Va
                 }}
                 formatter={(value: number, name: string) => [
                   formatCurrency(value),
-                  name === "realizado" ? "Realizado (acumulado)" : "Validado (acumulado)"
+                  name === "realizado" ? "Realizado" : "Validado EQTL"
                 ]}
                 labelFormatter={(label) => `Data: ${label}`}
               />
               <Legend 
                 formatter={(value) => value === "realizado" ? "Realizado" : "Validado EQTL"}
               />
-              <Line
-                type="monotone"
+              <Bar
                 dataKey="realizado"
-                stroke="hsl(25, 95%, 53%)"
-                strokeWidth={2}
-                dot={{ r: 3 }}
-                activeDot={{ r: 6 }}
+                fill="hsl(25, 95%, 53%)"
+                radius={[4, 4, 0, 0]}
                 name="realizado"
               />
-              <Line
-                type="monotone"
+              <Bar
                 dataKey="validado"
-                stroke="hsl(142, 76%, 36%)"
-                strokeWidth={2}
-                dot={{ r: 3 }}
-                activeDot={{ r: 6 }}
+                fill="hsl(142, 76%, 36%)"
+                radius={[4, 4, 0, 0]}
                 name="validado"
               />
-            </LineChart>
+            </BarChart>
           </ResponsiveContainer>
         </div>
       </CardContent>
