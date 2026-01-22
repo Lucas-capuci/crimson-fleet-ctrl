@@ -84,37 +84,47 @@ const Dashboard = () => {
         </p>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards with staggered animation */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
-        <StatsCard
-          title="Total de Veículos"
-          value={vehicleStats?.total ?? 0}
-          icon={Car}
-          variant="primary"
-        />
-        <StatsCard
-          title="Manutenção/Oficina"
-          value={vehicleStats?.inMaintenance ?? 0}
-          icon={Wrench}
-          variant="warning"
-          onClick={() => setWorkshopModalOpen(true)}
-        />
-        <StatsCard
-          title="Motoristas Ativos"
-          value={driverCount ?? 0}
-          icon={Users}
-          variant="success"
-        />
-        <StatsCard
-          title="Saídas Hoje"
-          value={`${departureStats?.departed ?? 0}/${departureStats?.total ?? 0}`}
-          icon={LogIn}
-          variant="success"
-        />
+        <div className="animate-fade-in-up" style={{ animationDelay: '0ms' }}>
+          <StatsCard
+            title="Total de Veículos"
+            value={vehicleStats?.total ?? 0}
+            icon={Car}
+            variant="primary"
+          />
+        </div>
+        <div className="animate-fade-in-up" style={{ animationDelay: '75ms' }}>
+          <StatsCard
+            title="Manutenção/Oficina"
+            value={vehicleStats?.inMaintenance ?? 0}
+            icon={Wrench}
+            variant="warning"
+            onClick={() => setWorkshopModalOpen(true)}
+          />
+        </div>
+        <div className="animate-fade-in-up" style={{ animationDelay: '150ms' }}>
+          <StatsCard
+            title="Motoristas Ativos"
+            value={driverCount ?? 0}
+            icon={Users}
+            variant="success"
+          />
+        </div>
+        <div className="animate-fade-in-up" style={{ animationDelay: '225ms' }}>
+          <StatsCard
+            title="Saídas Hoje"
+            value={`${departureStats?.departed ?? 0}/${departureStats?.total ?? 0}`}
+            icon={LogIn}
+            variant="success"
+          />
+        </div>
       </div>
 
       {/* Departures Overview with KPIs */}
-      <DeparturesOverview />
+      <div className="animate-fade-in-up" style={{ animationDelay: '300ms' }}>
+        <DeparturesOverview />
+      </div>
 
       {/* Workshop Vehicles Modal */}
       <WorkshopVehiclesModal

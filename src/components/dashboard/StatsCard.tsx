@@ -52,8 +52,9 @@ export function StatsCard({
       onClick={onClick}
       className={cn(
         "bg-card rounded-2xl border border-border p-6 relative overflow-hidden",
-        "shadow-premium transition-all duration-200 ease-in-out",
-        "hover:shadow-premium-hover hover:-translate-y-0.5",
+        "shadow-premium transition-all duration-300 ease-out",
+        "hover:shadow-premium-hover hover:-translate-y-1",
+        "opacity-0 animate-scale-in",
         isClickable && "cursor-pointer"
       )}
     >
@@ -87,7 +88,8 @@ export function StatsCard({
         </div>
         <div
           className={cn(
-            "p-3 rounded-xl flex-shrink-0",
+            "p-3 rounded-xl flex-shrink-0 transition-transform duration-300",
+            "group-hover:scale-110",
             iconBgColors[variant]
           )}
         >
