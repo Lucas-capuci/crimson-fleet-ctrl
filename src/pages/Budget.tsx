@@ -17,13 +17,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { Calendar } from "@/components/ui/calendar";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Plus, Search, Trash2, Save, Check, ChevronsUpDown, CalendarIcon, Users, BarChart3, X, MapPin, Pencil, Upload } from "lucide-react";
+import { Plus, Search, Trash2, Save, Check, ChevronsUpDown, CalendarIcon, Users, BarChart3, X, MapPin, Pencil, Upload, CheckCircle } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AnalyticsTab } from "@/components/budget/AnalyticsTab";
+import { ValuesComparisonChart } from "@/components/budget/ValuesComparisonChart";
 
 interface Team {
   id: string;
@@ -55,6 +56,7 @@ interface OSE {
   description: string | null;
   status: string;
   total_value: number;
+  validated_value?: number | null;
   created_by: string;
   created_at: string;
   trips?: OSETrip[];
@@ -143,6 +145,10 @@ export default function Budget() {
   // Import catalog
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importData, setImportData] = useState("");
+  
+  // Validated value editing
+  const [editingValidatedOseId, setEditingValidatedOseId] = useState<string | null>(null);
+  const [validatedValueInput, setValidatedValueInput] = useState<string>("");
 
   // Fetch services catalog
   const { data: services = [] } = useQuery({
@@ -564,6 +570,27 @@ export default function Budget() {
     },
     onError: (error: Error) => {
       toast({ title: "Erro ao atualizar ida", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Update validated value
+  const updateValidatedValue = useMutation({
+    mutationFn: async ({ oseId, value }: { oseId: string; value: number | null }) => {
+      const { error } = await supabase
+        .from("oses")
+        .update({ validated_value: value } as any)
+        .eq("id", oseId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["oses"] });
+      setEditingValidatedOseId(null);
+      setValidatedValueInput("");
+      toast({ title: "Valor validado atualizado!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atualizar valor validado", description: error.message, variant: "destructive" });
     },
   });
 
@@ -1096,6 +1123,13 @@ export default function Budget() {
               </CardContent>
             </Card>
 
+            {/* Values Comparison Chart */}
+            <ValuesComparisonChart 
+              oses={filteredOses} 
+              dateFromFilter={dateFromFilter}
+              dateToFilter={dateToFilter}
+            />
+
             {/* OSE List with inline details */}
             <div className="space-y-4">
               {filteredOses.map((ose) => (
@@ -1142,13 +1176,75 @@ export default function Budget() {
                             )}
                           </div>
                         )}
-                        <div className="flex justify-between items-center pt-2">
+                        <div className="flex justify-between items-end pt-2">
                           <span className="text-sm text-muted-foreground">
                             {ose.trips?.length || 0} ida(s)
                           </span>
-                          <span className="text-lg font-bold text-primary">
-                            {formatCurrency(ose.total_value)}
-                          </span>
+                          <div className="text-right">
+                            <span className="text-lg font-bold text-primary block">
+                              {formatCurrency(ose.total_value)}
+                            </span>
+                            {ose.validated_value !== null && ose.validated_value !== undefined ? (
+                              <span className="text-sm text-success flex items-center justify-end gap-1">
+                                <CheckCircle className="h-3 w-3" />
+                                Validado: {formatCurrency(ose.validated_value)}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Não validado</span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Validated Value Input */}
+                        <div 
+                          className="pt-2 border-t mt-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {editingValidatedOseId === ose.id ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="Valor validado EQTL"
+                                value={validatedValueInput}
+                                onChange={(e) => setValidatedValueInput(e.target.value)}
+                                className="flex-1"
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  const value = validatedValueInput ? parseFloat(validatedValueInput) : null;
+                                  updateValidatedValue.mutate({ oseId: ose.id, value });
+                                }}
+                                disabled={updateValidatedValue.isPending}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setEditingValidatedOseId(null);
+                                  setValidatedValueInput("");
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => {
+                                setEditingValidatedOseId(ose.id);
+                                setValidatedValueInput(ose.validated_value?.toString() || "");
+                              }}
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              {ose.validated_value ? "Editar Valor Validado" : "Lançar Valor Validado"}
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </CardContent>
