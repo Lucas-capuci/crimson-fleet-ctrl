@@ -1,8 +1,14 @@
 /**
- * Normalized Weighted Average Scoring System
+ * Simplified Fair Scoring System
  * 
- * This module implements a fair scoring system that normalizes daily scores
- * to a range of -20 to +20, regardless of the number of reports a person is responsible for.
+ * New Model:
+ * - Base points per report = 20 / total_reports_for_person
+ * - On time (NO_HORARIO): +base_points
+ * - Late (FORA_DO_HORARIO): -base_points/2 (loses half)
+ * - Error/forgot (ESQUECEU_ERRO): -base_points (loses full)
+ * 
+ * This ensures everyone's daily score naturally ranges from -20 to +20
+ * regardless of how many reports they're responsible for.
  */
 
 export interface ReportEntry {
@@ -24,11 +30,9 @@ export interface ReportConfig {
 export interface DailyScore {
   responsavel: string;
   data: string;
-  sumObtained: number;
-  sumMax: number;
-  sumMin: number;
-  performanceIndex: number;
-  normalizedScore: number;
+  basePointsPerReport: number;
+  totalReportsExpected: number;
+  dailyScore: number;
   reportsCount: number;
   onTimeCount: number;
   lateCount: number;
@@ -47,7 +51,50 @@ export interface AggregatedScore {
 }
 
 /**
- * Calculate normalized daily score for a person on a specific day
+ * Get the total number of reports a person is responsible for
+ */
+export function getPersonTotalReports(
+  responsavel: string,
+  configs: ReportConfig[]
+): number {
+  return configs.filter(config => 
+    config.responsaveis?.includes(responsavel)
+  ).length;
+}
+
+/**
+ * Calculate base points per report for a person
+ * Base = 20 / total_reports
+ */
+export function calculateBasePoints(totalReports: number): number {
+  if (totalReports <= 0) return 0;
+  return 20 / totalReports;
+}
+
+/**
+ * Calculate points for a single report entry based on new model
+ * - On time: +base
+ * - Late: -base/2
+ * - Error: -base
+ */
+export function calculateEntryPoints(
+  status: "NO_HORARIO" | "FORA_DO_HORARIO" | "ESQUECEU_ERRO",
+  basePoints: number
+): number {
+  switch (status) {
+    case "NO_HORARIO":
+      return basePoints;
+    case "FORA_DO_HORARIO":
+      return -(basePoints / 2);
+    case "ESQUECEU_ERRO":
+      return -basePoints;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Calculate daily score for a person on a specific day
  */
 export function calculateDailyNormalizedScore(
   entries: ReportEntry[],
@@ -58,54 +105,44 @@ export function calculateDailyNormalizedScore(
   const responsavel = entries[0].responsavel;
   const data = entries[0].data;
 
-  let sumObtained = 0;
-  let sumMax = 0;
-  let sumMin = 0;
+  // Get total reports this person is responsible for
+  const totalReportsExpected = getPersonTotalReports(responsavel, configs);
+  if (totalReportsExpected === 0) return null;
+
+  // Calculate base points per report
+  const basePointsPerReport = calculateBasePoints(totalReportsExpected);
+
+  let dailyScore = 0;
   let onTimeCount = 0;
   let lateCount = 0;
   let errorCount = 0;
 
   entries.forEach((entry) => {
-    const config = configs.find((c) => c.tipo_relatorio === entry.tipo_relatorio);
-    if (!config) return;
+    const points = calculateEntryPoints(entry.status, basePointsPerReport);
+    dailyScore += points;
 
-    // Maximum points (all on time)
-    sumMax += config.pontos_no_horario;
-    // Minimum points (all errors)
-    sumMin += config.pontos_esqueceu_ou_erro;
-
-    // Actual points based on status
     switch (entry.status) {
       case "NO_HORARIO":
-        sumObtained += config.pontos_no_horario;
         onTimeCount++;
         break;
       case "FORA_DO_HORARIO":
-        sumObtained += config.pontos_fora_do_horario;
         lateCount++;
         break;
       case "ESQUECEU_ERRO":
-        sumObtained += config.pontos_esqueceu_ou_erro;
         errorCount++;
         break;
     }
   });
 
-  // Calculate performance index (0 to 1)
-  const range = sumMax - sumMin;
-  const performanceIndex = range !== 0 ? (sumObtained - sumMin) / range : 0.5;
-
-  // Convert to daily score (-20 to +20)
-  const normalizedScore = Math.round((performanceIndex * 40 - 20) * 100) / 100;
+  // Round to 2 decimal places
+  dailyScore = Math.round(dailyScore * 100) / 100;
 
   return {
     responsavel,
     data,
-    sumObtained,
-    sumMax,
-    sumMin,
-    performanceIndex,
-    normalizedScore,
+    basePointsPerReport: Math.round(basePointsPerReport * 100) / 100,
+    totalReportsExpected,
+    dailyScore,
     reportsCount: entries.length,
     onTimeCount,
     lateCount,
@@ -167,7 +204,7 @@ export function calculateAggregatedScores(
     }
 
     const agg = aggregated.get(daily.responsavel)!;
-    agg.totalNormalizedScore += daily.normalizedScore;
+    agg.totalNormalizedScore += daily.dailyScore;
     agg.totalDays += 1;
     agg.totalOnTime += daily.onTimeCount;
     agg.totalLate += daily.lateCount;

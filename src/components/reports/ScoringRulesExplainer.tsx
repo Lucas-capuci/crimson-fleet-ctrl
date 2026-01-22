@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { 
   HelpCircle, 
   Target, 
@@ -22,86 +21,72 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 
-interface ExampleScenario {
+interface ExamplePerson {
   name: string;
+  totalReports: number;
   reports: { name: string; status: "on_time" | "late" | "error" }[];
-  configs: { name: string; onTime: number; late: number; error: number }[];
 }
 
-const EXAMPLE_SCENARIOS: ExampleScenario[] = [
+const EXAMPLE_SCENARIOS: ExamplePerson[] = [
   {
-    name: "Dia Perfeito",
+    name: "Wander (6 relatórios)",
+    totalReports: 6,
     reports: [
-      { name: "Relatório A", status: "on_time" },
-      { name: "Relatório B", status: "on_time" },
-      { name: "Relatório C", status: "on_time" },
-    ],
-    configs: [
-      { name: "Relatório A", onTime: 20, late: -10, error: -40 },
-      { name: "Relatório B", onTime: 15, late: -5, error: -30 },
-      { name: "Relatório C", onTime: 25, late: -15, error: -50 },
+      { name: "Relatório 1", status: "on_time" },
+      { name: "Relatório 2", status: "on_time" },
+      { name: "Relatório 3", status: "on_time" },
+      { name: "Relatório 4", status: "on_time" },
+      { name: "Relatório 5", status: "on_time" },
+      { name: "Relatório 6", status: "on_time" },
     ],
   },
   {
-    name: "Dia Misto",
+    name: "Maria (4 relatórios)",
+    totalReports: 4,
     reports: [
-      { name: "Relatório A", status: "on_time" },
-      { name: "Relatório B", status: "late" },
-      { name: "Relatório C", status: "error" },
-    ],
-    configs: [
-      { name: "Relatório A", onTime: 20, late: -10, error: -40 },
-      { name: "Relatório B", onTime: 15, late: -5, error: -30 },
-      { name: "Relatório C", onTime: 25, late: -15, error: -50 },
+      { name: "Relatório 1", status: "on_time" },
+      { name: "Relatório 2", status: "late" },
+      { name: "Relatório 3", status: "on_time" },
+      { name: "Relatório 4", status: "error" },
     ],
   },
   {
-    name: "Dia Difícil",
+    name: "João (3 relatórios)",
+    totalReports: 3,
     reports: [
-      { name: "Relatório A", status: "error" },
-      { name: "Relatório B", status: "error" },
-      { name: "Relatório C", status: "late" },
-    ],
-    configs: [
-      { name: "Relatório A", onTime: 20, late: -10, error: -40 },
-      { name: "Relatório B", onTime: 15, late: -5, error: -30 },
-      { name: "Relatório C", onTime: 25, late: -15, error: -50 },
+      { name: "Relatório 1", status: "late" },
+      { name: "Relatório 2", status: "error" },
+      { name: "Relatório 3", status: "late" },
     ],
   },
 ];
 
-function calculateNormalizedScore(
-  reports: ExampleScenario["reports"],
-  configs: ExampleScenario["configs"]
-) {
-  let sumObtained = 0;
-  let sumMax = 0;
-  let sumMin = 0;
+function calculateNewScore(person: ExamplePerson) {
+  const basePoints = 20 / person.totalReports;
+  let dailyScore = 0;
+  let onTime = 0;
+  let late = 0;
+  let error = 0;
 
-  reports.forEach((report, index) => {
-    const config = configs[index];
-    sumMax += config.onTime;
-    sumMin += config.error;
-
+  person.reports.forEach((report) => {
     if (report.status === "on_time") {
-      sumObtained += config.onTime;
+      dailyScore += basePoints;
+      onTime++;
     } else if (report.status === "late") {
-      sumObtained += config.late;
+      dailyScore -= basePoints / 2;
+      late++;
     } else {
-      sumObtained += config.error;
+      dailyScore -= basePoints;
+      error++;
     }
   });
 
-  const range = sumMax - sumMin;
-  const performanceIndex = range !== 0 ? (sumObtained - sumMin) / range : 0.5;
-  const dailyScore = performanceIndex * 40 - 20;
-
   return {
-    sumObtained,
-    sumMax,
-    sumMin,
-    performanceIndex,
+    basePoints: Math.round(basePoints * 100) / 100,
     dailyScore: Math.round(dailyScore * 100) / 100,
+    onTime,
+    late,
+    error,
   };
 }
 
@@ -109,8 +94,8 @@ export function ScoringRulesExplainer() {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState(0);
 
-  const scenario = EXAMPLE_SCENARIOS[selectedScenario];
-  const calculation = calculateNormalizedScore(scenario.reports, scenario.configs);
+  const person = EXAMPLE_SCENARIOS[selectedScenario];
+  const calculation = calculateNewScore(person);
 
   const getStatusIcon = (status: "on_time" | "late" | "error") => {
     switch (status) {
@@ -130,7 +115,18 @@ export function ScoringRulesExplainer() {
       case "late":
         return "Atrasado";
       case "error":
-        return "Erro/Esqueceu";
+        return "Esqueceu/Erro";
+    }
+  };
+
+  const getPointsForStatus = (status: "on_time" | "late" | "error", basePoints: number) => {
+    switch (status) {
+      case "on_time":
+        return `+${basePoints.toFixed(2)}`;
+      case "late":
+        return `−${(basePoints / 2).toFixed(2)}`;
+      case "error":
+        return `−${basePoints.toFixed(2)}`;
     }
   };
 
@@ -140,8 +136,6 @@ export function ScoringRulesExplainer() {
     if (score >= -10) return "text-yellow-500";
     return "text-red-500";
   };
-
-  const progressValue = ((calculation.dailyScore + 20) / 40) * 100;
 
   return (
     <Card className="border-dashed border-2 border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
@@ -164,22 +158,30 @@ export function ScoringRulesExplainer() {
 
         <CollapsibleContent>
           <CardContent className="space-y-6">
-            {/* Visual Score Gauge */}
+            {/* New Formula Explanation */}
+            <div className="p-4 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2 mb-3">
+                <Calculator className="h-5 w-5 text-primary" />
+                <span className="font-semibold">Nova Fórmula Simplificada</span>
+              </div>
+              <div className="space-y-2 text-sm font-mono bg-background p-3 rounded border">
+                <p className="font-bold text-primary">Pontos Base = 20 ÷ Quantidade de Relatórios</p>
+                <div className="border-t pt-2 mt-2 space-y-1">
+                  <p className="text-green-600">✓ No horário: <strong>+base</strong></p>
+                  <p className="text-yellow-600">⏱ Atrasado: <strong>−base/2</strong> (perde metade)</p>
+                  <p className="text-red-600">✗ Esqueceu/Erro: <strong>−base</strong> (perde tudo)</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Visual Score Range */}
             <div className="text-center p-4 bg-card rounded-lg border">
               <div className="flex items-center justify-center gap-3 mb-3">
                 <div className="flex items-center gap-1">
                   <TrendingDown className="h-5 w-5 text-red-500" />
                   <span className="font-bold text-red-500">-20</span>
                 </div>
-                <div className="flex-1 max-w-xs">
-                  <div className="relative">
-                    <Progress value={50} className="h-4 bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 opacity-30" />
-                    <div 
-                      className="absolute top-0 h-4 w-1 bg-foreground rounded"
-                      style={{ left: `${progressValue}%`, transform: 'translateX(-50%)' }}
-                    />
-                  </div>
-                </div>
+                <div className="flex-1 max-w-xs h-3 rounded-full bg-gradient-to-r from-red-500 via-yellow-500 to-green-500" />
                 <div className="flex items-center gap-1">
                   <span className="font-bold text-green-500">+20</span>
                   <TrendingUp className="h-5 w-5 text-green-500" />
@@ -204,36 +206,21 @@ export function ScoringRulesExplainer() {
               <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
                 <div className="flex items-center gap-2 mb-2">
                   <Clock className="h-5 w-5 text-yellow-500" />
-                  <span className="font-semibold text-yellow-700 dark:text-yellow-400">Atenção</span>
+                  <span className="font-semibold text-yellow-700 dark:text-yellow-400">Atraso</span>
                 </div>
                 <p className="text-sm">
-                  Atrasos reduzem proporcionalmente
+                  Perde <strong>metade</strong> dos pontos base
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
                 <div className="flex items-center gap-2 mb-2">
                   <XCircle className="h-5 w-5 text-red-500" />
-                  <span className="font-semibold text-red-700 dark:text-red-400">Evite</span>
+                  <span className="font-semibold text-red-700 dark:text-red-400">Erro</span>
                 </div>
                 <p className="text-sm">
-                  100% erros = <strong>-20 pts</strong>
+                  Perde <strong>todos</strong> os pontos base
                 </p>
               </div>
-            </div>
-
-            {/* Formula Explanation */}
-            <div className="p-4 rounded-lg bg-muted/50">
-              <div className="flex items-center gap-2 mb-3">
-                <Calculator className="h-5 w-5 text-primary" />
-                <span className="font-semibold">Fórmula de Cálculo</span>
-              </div>
-              <div className="space-y-2 text-sm font-mono bg-background p-3 rounded border">
-                <p>1. Índice = (Pts Obtidos - Pts Mínimo) / (Pts Máximo - Pts Mínimo)</p>
-                <p>2. Pontuação Diária = (Índice × 40) - 20</p>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                * Isso garante que a pontuação seja justa independente da quantidade de relatórios
-              </p>
             </div>
 
             {/* Interactive Example */}
@@ -257,12 +244,19 @@ export function ScoringRulesExplainer() {
                 ))}
               </div>
 
+              {/* Base Points Calculation */}
+              <div className="p-3 mb-4 rounded bg-primary/10 border border-primary/30">
+                <p className="text-sm font-medium">
+                  📊 Pontos base: <strong>20 ÷ {person.totalReports} = {calculation.basePoints.toFixed(2)} pts</strong> por relatório
+                </p>
+              </div>
+
               {/* Scenario Details */}
               <div className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {scenario.reports.map((report, idx) => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {person.reports.map((report, idx) => (
                     <div
-                      key={report.name}
+                      key={idx}
                       className="flex items-center gap-2 p-2 rounded bg-muted/50"
                     >
                       {getStatusIcon(report.status)}
@@ -272,12 +266,17 @@ export function ScoringRulesExplainer() {
                           {getStatusLabel(report.status)}
                         </p>
                       </div>
-                      <Badge variant="outline" className="text-xs">
-                        {report.status === "on_time"
-                          ? `+${scenario.configs[idx].onTime}`
-                          : report.status === "late"
-                          ? scenario.configs[idx].late
-                          : scenario.configs[idx].error}
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs ${
+                          report.status === "on_time" 
+                            ? "text-green-600 border-green-300" 
+                            : report.status === "late"
+                            ? "text-yellow-600 border-yellow-300"
+                            : "text-red-600 border-red-300"
+                        }`}
+                      >
+                        {getPointsForStatus(report.status, calculation.basePoints)}
                       </Badge>
                     </div>
                   ))}
@@ -286,30 +285,38 @@ export function ScoringRulesExplainer() {
                 {/* Calculation Breakdown */}
                 <div className="p-3 rounded bg-muted/30 space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span>Pontos Obtidos:</span>
-                    <span className="font-mono">{calculation.sumObtained}</span>
+                    <span className="text-green-600">✓ No horário ({calculation.onTime}x):</span>
+                    <span className="font-mono text-green-600">
+                      +{(calculation.basePoints * calculation.onTime).toFixed(2)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Máximo Possível:</span>
-                    <span className="font-mono text-green-600">{calculation.sumMax}</span>
+                    <span className="text-yellow-600">⏱ Atrasados ({calculation.late}x):</span>
+                    <span className="font-mono text-yellow-600">
+                      −{((calculation.basePoints / 2) * calculation.late).toFixed(2)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Mínimo Possível:</span>
-                    <span className="font-mono text-red-600">{calculation.sumMin}</span>
+                    <span className="text-red-600">✗ Erros ({calculation.error}x):</span>
+                    <span className="font-mono text-red-600">
+                      −{(calculation.basePoints * calculation.error).toFixed(2)}
+                    </span>
                   </div>
-                  <div className="border-t pt-2 flex justify-between">
-                    <span>Índice de Desempenho:</span>
-                    <span className="font-mono">{(calculation.performanceIndex * 100).toFixed(1)}%</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-base">
+                  <div className="border-t pt-2 flex justify-between font-bold text-base">
                     <span>Pontuação do Dia:</span>
                     <span className={`font-mono ${getScoreColor(calculation.dailyScore)}`}>
-                      {calculation.dailyScore > 0 ? "+" : ""}{calculation.dailyScore}
+                      {calculation.dailyScore > 0 ? "+" : ""}{calculation.dailyScore.toFixed(2)}
                     </span>
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* Fairness Note */}
+            <p className="text-xs text-muted-foreground text-center italic">
+              💡 Este sistema é justo porque quem tem mais relatórios ganha menos pontos por cada um,
+              mas todos podem alcançar +20 ou -20 no dia.
+            </p>
           </CardContent>
         </CollapsibleContent>
       </Collapsible>

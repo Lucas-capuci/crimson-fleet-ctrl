@@ -224,7 +224,7 @@ export default function Reports() {
     return Array.from(set).sort();
   }, [configs]);
 
-  // Create entry mutation
+  // Create entry mutation - uses new scoring model
   const createEntryMutation = useMutation({
     mutationFn: async (data: {
       data: string;
@@ -232,17 +232,28 @@ export default function Reports() {
       responsavel: string;
       status: ReportStatus;
     }) => {
-      const config = configs.find((c) => c.tipo_relatorio === data.tipo_relatorio);
-      if (!config) throw new Error("Configuração não encontrada");
+      // Get total reports this person is responsible for
+      const totalReports = configs.filter(c => 
+        c.responsaveis?.includes(data.responsavel)
+      ).length;
       
+      if (totalReports === 0) throw new Error("Responsável não configurado em nenhum relatório");
+      
+      // Calculate base points: 20 / total_reports
+      const basePoints = 20 / totalReports;
+      
+      // Calculate points based on new model
       let pontos = 0;
       if (data.status === "NO_HORARIO") {
-        pontos = config.pontos_no_horario;
+        pontos = basePoints; // gains full base
       } else if (data.status === "FORA_DO_HORARIO") {
-        pontos = config.pontos_fora_do_horario;
+        pontos = -(basePoints / 2); // loses half
       } else {
-        pontos = config.pontos_esqueceu_ou_erro;
+        pontos = -basePoints; // loses full
       }
+      
+      // Round to 2 decimal places
+      pontos = Math.round(pontos * 100) / 100;
       
       const { error } = await supabase.from("controle_diario").insert({
         data: data.data,
@@ -256,7 +267,7 @@ export default function Reports() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["controle-diario"] });
-      queryClient.invalidateQueries({ queryKey: ["ranking-pontos"] });
+      queryClient.invalidateQueries({ queryKey: ["all-controle-diario"] });
       toast.success("Registro salvo com sucesso!");
       setFormData({
         data: format(new Date(), "yyyy-MM-dd"),
