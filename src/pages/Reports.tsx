@@ -252,8 +252,8 @@ export default function Reports() {
         pontos = -basePoints; // loses full
       }
       
-      // Round to 2 decimal places
-      pontos = Math.round(pontos * 100) / 100;
+      // Round to integer (database column is integer)
+      pontos = Math.round(pontos);
       
       const { error } = await supabase.from("controle_diario").insert({
         data: data.data,
