@@ -133,6 +133,13 @@ export default function Budget() {
   const [editOseDescription, setEditOseDescription] = useState("");
   const [editOseStatus, setEditOseStatus] = useState("");
   
+  // Edit Trip
+  const [isEditTripDialogOpen, setIsEditTripDialogOpen] = useState(false);
+  const [editingTrip, setEditingTrip] = useState<OSETrip | null>(null);
+  const [editTripTeam, setEditTripTeam] = useState<Team | null>(null);
+  const [editTripDate, setEditTripDate] = useState<Date | undefined>(undefined);
+  const [editTripServices, setEditTripServices] = useState<{ service: ServiceCatalog; quantity: number }[]>([]);
+  
   // Import catalog
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importData, setImportData] = useState("");
@@ -497,6 +504,69 @@ export default function Budget() {
     },
   });
 
+  // Update Trip
+  const updateTrip = useMutation({
+    mutationFn: async () => {
+      if (!editingTrip || !selectedOse || !editTripTeam || !editTripDate) {
+        throw new Error("Dados incompletos");
+      }
+
+      // Calculate old total
+      const oldTripTotal = (editingTrip.items || []).reduce((s, i) => s + i.total_price, 0);
+      
+      // Calculate new total
+      const newTripTotal = editTripServices.reduce(
+        (sum, item) => sum + item.service.gross_price * item.quantity,
+        0
+      );
+
+      // Update trip
+      const { error: tripError } = await supabase
+        .from("ose_trips")
+        .update({
+          team_id: editTripTeam.id,
+          date: `${editTripDate.getFullYear()}-${String(editTripDate.getMonth() + 1).padStart(2, '0')}-${String(editTripDate.getDate()).padStart(2, '0')}`,
+        })
+        .eq("id", editingTrip.id);
+
+      if (tripError) throw tripError;
+
+      // Delete old items
+      await supabase.from("ose_items").delete().eq("trip_id", editingTrip.id);
+
+      // Create new items
+      if (editTripServices.length > 0) {
+        const items = editTripServices.map((item) => ({
+          ose_id: selectedOse.id,
+          trip_id: editingTrip.id,
+          service_id: item.service.id,
+          quantity: item.quantity,
+          unit_price: item.service.gross_price,
+          total_price: item.service.gross_price * item.quantity,
+        }));
+
+        const { error: itemsError } = await supabase.from("ose_items").insert(items);
+        if (itemsError) throw itemsError;
+      }
+
+      // Update OSE total
+      await supabase
+        .from("oses")
+        .update({ total_value: selectedOse.total_value - oldTripTotal + newTripTotal })
+        .eq("id", selectedOse.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["oses"] });
+      queryClient.invalidateQueries({ queryKey: ["ose-trips-items", selectedOse?.id] });
+      setIsEditTripDialogOpen(false);
+      setEditingTrip(null);
+      toast({ title: "Ida atualizada com sucesso!" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao atualizar ida", description: error.message, variant: "destructive" });
+    },
+  });
+
   // Import services catalog
   const importCatalog = useMutation({
     mutationFn: async () => {
@@ -597,6 +667,32 @@ export default function Budget() {
 
   const removeServiceFromNewTrip = (index: number) => {
     setNewTripServices(newTripServices.filter((_, i) => i !== index));
+  };
+
+  // Edit trip helpers
+  const openEditTripDialog = (trip: OSETrip) => {
+    setEditingTrip(trip);
+    setEditTripTeam(trip.team || null);
+    setEditTripDate(new Date(trip.date));
+    setEditTripServices(
+      (trip.items || []).map((item) => ({
+        service: item.service!,
+        quantity: item.quantity,
+      }))
+    );
+    setIsEditTripDialogOpen(true);
+  };
+
+  const addServiceToEditTrip = () => {
+    if (!selectedService) return;
+    setEditTripServices([...editTripServices, { service: selectedService, quantity }]);
+    setSelectedService(null);
+    setQuantity(1);
+    setUpSearch("");
+  };
+
+  const removeServiceFromEditTrip = (index: number) => {
+    setEditTripServices(editTripServices.filter((_, i) => i !== index));
   };
 
   const cartTotal = tripCart.reduce(
@@ -1000,68 +1096,66 @@ export default function Budget() {
               </CardContent>
             </Card>
 
-            {/* OSE List */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {/* OSE List with inline details */}
+            <div className="space-y-4">
               {filteredOses.map((ose) => (
-                <Card
-                  key={ose.id}
-                  className={cn(
-                    "cursor-pointer transition-all hover:shadow-md",
-                    selectedOse?.id === ose.id && "ring-2 ring-primary"
-                  )}
-                  onClick={() => setSelectedOse(ose)}
-                >
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">{ose.ose_number}</CardTitle>
-                      <Badge
-                        variant={
-                          ose.status === "aberta"
-                            ? "default"
-                            : ose.status === "em_andamento"
-                            ? "secondary"
-                            : "outline"
-                        }
-                      >
-                        {ose.status === "aberta" ? "Aberta" : ose.status === "em_andamento" ? "Em Andamento" : "Finalizada"}
-                      </Badge>
-                    </div>
-                    {ose.description && (
-                      <CardDescription className="line-clamp-1">{ose.description}</CardDescription>
+                <div key={ose.id} className="space-y-4">
+                  <Card
+                    className={cn(
+                      "cursor-pointer transition-all hover:shadow-md",
+                      selectedOse?.id === ose.id && "ring-2 ring-primary"
                     )}
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {ose.trips && ose.trips.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {ose.trips.slice(0, 3).map((trip, i) => (
-                            <Badge key={i} variant="outline" className="text-xs">
-                              {trip.team?.name} - {format(new Date(trip.date), "dd/MM")}
-                            </Badge>
-                          ))}
-                          {ose.trips.length > 3 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{ose.trips.length - 3}
-                            </Badge>
-                          )}
-                        </div>
-                      )}
-                      <div className="flex justify-between items-center pt-2">
-                        <span className="text-sm text-muted-foreground">
-                          {ose.trips?.length || 0} ida(s)
-                        </span>
-                        <span className="text-lg font-bold text-primary">
-                          {formatCurrency(ose.total_value)}
-                        </span>
+                    onClick={() => setSelectedOse(selectedOse?.id === ose.id ? null : ose)}
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg">{ose.ose_number}</CardTitle>
+                        <Badge
+                          variant={
+                            ose.status === "aberta"
+                              ? "default"
+                              : ose.status === "em_andamento"
+                              ? "secondary"
+                              : "outline"
+                          }
+                        >
+                          {ose.status === "aberta" ? "Aberta" : ose.status === "em_andamento" ? "Em Andamento" : "Finalizada"}
+                        </Badge>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                      {ose.description && (
+                        <CardDescription className="line-clamp-1">{ose.description}</CardDescription>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {ose.trips && ose.trips.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {ose.trips.slice(0, 3).map((trip, i) => (
+                              <Badge key={i} variant="outline" className="text-xs">
+                                {trip.team?.name} - {format(new Date(trip.date), "dd/MM")}
+                              </Badge>
+                            ))}
+                            {ose.trips.length > 3 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{ose.trips.length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center pt-2">
+                          <span className="text-sm text-muted-foreground">
+                            {ose.trips?.length || 0} ida(s)
+                          </span>
+                          <span className="text-lg font-bold text-primary">
+                            {formatCurrency(ose.total_value)}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
 
-            {/* Selected OSE Details */}
-            {selectedOse && (
+                  {/* Inline OSE Details Panel */}
+                  {selectedOse?.id === ose.id && (
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -1349,7 +1443,15 @@ export default function Budget() {
                                 ))}
                               </TableBody>
                             </Table>
-                            <div className="flex justify-end mt-2">
+                            <div className="flex justify-end mt-2 gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openEditTripDialog(trip)}
+                              >
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Editar Ida
+                              </Button>
                               <Button
                                 variant="destructive"
                                 size="sm"
@@ -1372,9 +1474,164 @@ export default function Budget() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Edit Trip Dialog */}
+                  <Dialog open={isEditTripDialogOpen} onOpenChange={setIsEditTripDialogOpen}>
+                    <DialogContent className="max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Editar Ida</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Equipe *</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="outline" className="w-full justify-between">
+                                  {editTripTeam?.name || "Selecione..."}
+                                  <Users className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[300px] p-0">
+                                <Command>
+                                  <CommandInput placeholder="Pesquisar..." />
+                                  <CommandList>
+                                    <CommandEmpty>Nenhuma equipe.</CommandEmpty>
+                                    <CommandGroup>
+                                      {teams.map((team) => (
+                                        <CommandItem
+                                          key={team.id}
+                                          value={team.name}
+                                          onSelect={() => setEditTripTeam(team)}
+                                        >
+                                          {team.name}
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Data *</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="outline" className="w-full justify-start">
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {editTripDate ? format(editTripDate, "dd/MM/yyyy") : "Selecione..."}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                  mode="single"
+                                  selected={editTripDate}
+                                  onSelect={setEditTripDate}
+                                  locale={ptBR}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="col-span-2 space-y-2">
+                            <Label>Serviço</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="outline" className="w-full justify-between">
+                                  {selectedService ? `${selectedService.up}` : "Selecione..."}
+                                  <ChevronsUpDown className="ml-2 h-4 w-4" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[400px] p-0">
+                                <Command>
+                                  <CommandInput
+                                    placeholder="Pesquisar..."
+                                    value={upSearch}
+                                    onValueChange={setUpSearch}
+                                  />
+                                  <CommandList>
+                                    <CommandEmpty>Nenhum serviço.</CommandEmpty>
+                                    <CommandGroup>
+                                      {filteredServices.map((service) => (
+                                        <CommandItem
+                                          key={service.id}
+                                          value={service.up}
+                                          onSelect={() => setSelectedService(service)}
+                                        >
+                                          <div className="flex-1">
+                                            <div className="font-medium">{service.up}</div>
+                                            <div className="text-xs text-muted-foreground truncate">
+                                              {service.description}
+                                            </div>
+                                          </div>
+                                          <span className="text-sm">{formatCurrency(service.gross_price)}</span>
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Qtd</Label>
+                            <div className="flex gap-2">
+                              <Input
+                                type="number"
+                                min={1}
+                                value={quantity}
+                                onChange={(e) => setQuantity(Number(e.target.value))}
+                              />
+                              <Button onClick={addServiceToEditTrip} disabled={!selectedService}>
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {editTripServices.length > 0 && (
+                          <div className="border rounded-lg p-3 space-y-2">
+                            {editTripServices.map((item, index) => (
+                              <div key={index} className="flex items-center justify-between bg-muted p-2 rounded">
+                                <span className="text-sm">{item.service.up} - {item.quantity}x</span>
+                                <div className="flex items-center gap-2">
+                                  <span>{formatCurrency(item.service.gross_price * item.quantity)}</span>
+                                  <Button variant="ghost" size="icon" onClick={() => removeServiceFromEditTrip(index)}>
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                            <div className="flex justify-between pt-2 border-t font-medium">
+                              <span>Total:</span>
+                              <span>{formatCurrency(editTripServices.reduce((s, i) => s + i.service.gross_price * i.quantity, 0))}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" onClick={() => setIsEditTripDialogOpen(false)}>
+                            Cancelar
+                          </Button>
+                          <Button
+                            onClick={() => updateTrip.mutate()}
+                            disabled={!editTripTeam || !editTripDate || editTripServices.length === 0 || updateTrip.isPending}
+                          >
+                            Salvar Alterações
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 </CardContent>
               </Card>
-            )}
+                  )}
+                </div>
+              ))}
+            </div>
           </TabsContent>
 
           {/* Analytics Tab */}
