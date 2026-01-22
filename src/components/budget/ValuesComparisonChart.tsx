@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from "recharts";
 import { format, parseISO, eachDayOfInterval, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -36,6 +36,14 @@ const formatCurrencyShort = (value: number) => {
     return `R$ ${(value / 1000).toFixed(1)}K`;
   }
   return `R$ ${value.toFixed(0)}`;
+};
+
+const formatLabelValue = (value: number) => {
+  if (value === 0) return "";
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}K`;
+  }
+  return value.toFixed(0);
 };
 
 export function ValuesComparisonChart({ oses, dateFromFilter, dateToFilter }: ValuesComparisonChartProps) {
@@ -177,13 +185,17 @@ export function ValuesComparisonChart({ oses, dateFromFilter, dateToFilter }: Va
                 fill="hsl(25, 95%, 53%)"
                 radius={[4, 4, 0, 0]}
                 name="realizado"
-              />
+              >
+                <LabelList dataKey="realizado" position="top" formatter={formatLabelValue} fontSize={10} fill="hsl(25, 95%, 40%)" />
+              </Bar>
               <Bar
                 dataKey="validado"
                 fill="hsl(142, 76%, 36%)"
                 radius={[4, 4, 0, 0]}
                 name="validado"
-              />
+              >
+                <LabelList dataKey="validado" position="top" formatter={formatLabelValue} fontSize={10} fill="hsl(142, 76%, 30%)" />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
