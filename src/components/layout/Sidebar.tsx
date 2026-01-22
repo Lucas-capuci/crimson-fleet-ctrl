@@ -78,16 +78,16 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile Header Bar */}
-      <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-sidebar flex items-center justify-between px-4 lg:hidden shadow-lg">
+      <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-sidebar flex items-center justify-between px-4 lg:hidden">
         <div className="flex items-center gap-3">
-          <div className="p-1.5 rounded-lg bg-sidebar-accent">
+          <div className="p-2 rounded-xl bg-sidebar-accent">
             <Truck className="h-5 w-5 text-sidebar-foreground" />
           </div>
-          <h1 className="text-lg font-bold text-sidebar-foreground">E-Grid</h1>
+          <h1 className="text-lg font-bold text-sidebar-foreground tracking-tight">E-Grid</h1>
         </div>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="p-2 rounded-lg bg-sidebar-accent text-sidebar-foreground"
+          className="p-2 rounded-xl bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground transition-colors"
           aria-label="Toggle menu"
         >
           {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -97,7 +97,7 @@ export function Sidebar() {
       {/* Overlay for mobile */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-30 lg:hidden"
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 lg:hidden"
           onClick={() => setIsOpen(false)}
         />
       )}
@@ -112,24 +112,29 @@ export function Sidebar() {
         <div className="flex flex-col h-full">
           {/* Logo - Hidden on mobile as it's in header */}
           <div className="hidden lg:flex items-center gap-3 px-6 py-6 border-b border-sidebar-border">
-            <div className="p-2 rounded-xl bg-sidebar-accent">
+            <div className="p-2.5 rounded-xl bg-sidebar-primary">
               <Truck className="h-6 w-6 text-sidebar-foreground" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-sidebar-foreground">E-Grid</h1>
-              <p className="text-xs text-sidebar-foreground/70">Gestão Operacional</p>
+              <h1 className="text-lg font-bold text-sidebar-foreground tracking-tight">E-Grid</h1>
+              <p className="text-xs text-sidebar-foreground/60 font-medium">Gestão Operacional</p>
             </div>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 lg:py-6 space-y-1 lg:space-y-2 overflow-y-auto mt-16 lg:mt-0">
+          <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto mt-16 lg:mt-0">
             {allNavItems.map((item) => (
               <NavLink
                 key={item.url}
                 to={item.url}
                 onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-200 group active:scale-95"
-                activeClassName="bg-sidebar-accent text-sidebar-foreground font-medium shadow-lg"
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-xl relative",
+                  "text-sidebar-foreground/70 font-medium text-sm",
+                  "hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                  "transition-all duration-200 ease-in-out"
+                )}
+                activeClassName="bg-sidebar-primary text-sidebar-foreground font-semibold before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-[3px] before:h-6 before:rounded-r-full before:bg-white"
               >
                 <item.icon className="h-5 w-5 flex-shrink-0" />
                 <span className="truncate">{item.title}</span>
@@ -138,16 +143,16 @@ export function Sidebar() {
           </nav>
 
           {/* Footer */}
-          <div className="px-3 py-4 border-t border-sidebar-border space-y-2">
+          <div className="px-4 py-5 border-t border-sidebar-border space-y-3">
             {user && (
-              <div className="text-xs text-sidebar-foreground/70 truncate px-2">
+              <div className="text-xs text-sidebar-foreground/50 truncate px-1 font-medium">
                 {user.email}
               </div>
             )}
             <Button
               variant="ghost"
               size="sm"
-              className="w-full justify-start gap-2 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              className="w-full justify-start gap-2.5 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground font-medium"
               onClick={() => signOut()}
             >
               <LogOut className="h-4 w-4" />

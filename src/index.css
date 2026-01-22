@@ -1,131 +1,121 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import "@fontsource/geist-sans/400.css";
-@import "@fontsource/geist-sans/500.css";
-@import "@fontsource/geist-sans/600.css";
-@import "@fontsource/geist-sans/700.css";
-
 @layer base {
   :root {
-    /* Material Design 3 - Light Theme - Red Primary */
-    --background: 0 0% 98%;
-    --foreground: 0 0% 15%;
-
+    /* Premium SaaS Color Palette - Clean & Professional */
+    --background: 216 20% 97%;
+    --foreground: 220 20% 14%;
+    
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 15%;
-
+    --card-foreground: 220 20% 14%;
+    
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 15%;
-
-    /* M3 Primary - Red */
-    --primary: 0 70% 45%;
+    --popover-foreground: 220 20% 14%;
+    
+    /* Primary: Dark Red - Corporate */
+    --primary: 0 68% 33%;
     --primary-foreground: 0 0% 100%;
-
-    /* M3 Secondary - Neutral */
-    --secondary: 0 0% 92%;
-    --secondary-foreground: 0 0% 25%;
-
-    /* M3 Surface Variant */
-    --muted: 0 0% 94%;
-    --muted-foreground: 0 0% 45%;
-
-    /* M3 Tertiary */
-    --accent: 0 65% 50%;
-    --accent-foreground: 0 0% 100%;
-
-    /* M3 Error */
-    --destructive: 0 80% 50%;
-    --destructive-foreground: 0 0% 100%;
-
+    
+    /* Secondary: Neutral Gray */
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 20% 25%;
+    
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 10% 42%;
+    
+    --accent: 220 14% 96%;
+    --accent-foreground: 220 20% 25%;
+    
     /* Success */
-    --success: 145 60% 40%;
+    --success: 152 60% 38%;
     --success-foreground: 0 0% 100%;
-
+    
     /* Warning */
-    --warning: 40 90% 50%;
+    --warning: 38 92% 50%;
     --warning-foreground: 0 0% 10%;
-
-    /* M3 Outline */
-    --border: 0 0% 85%;
-    --input: 0 0% 85%;
-    --ring: 0 70% 45%;
-
-    /* M3 Rounded corners */
-    --radius: 0.75rem;
-
-    /* Sidebar - Primary Container */
-    --sidebar-background: 0 70% 40%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 0 0% 100%;
-    --sidebar-primary-foreground: 0 70% 40%;
-    --sidebar-accent: 0 60% 50%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 0 60% 45%;
-    --sidebar-ring: 0 0% 100%;
-
-    /* Chart Colors */
-    --chart-1: 0 70% 45%;
-    --chart-2: 0 60% 55%;
-    --chart-3: 0 50% 65%;
-    --chart-4: 145 60% 40%;
-    --chart-5: 40 90% 50%;
-  }
-
-  .dark {
-    /* Material Design 3 - Dark Theme - Red */
-    --background: 0 0% 10%;
-    --foreground: 0 0% 95%;
-
-    --card: 0 0% 14%;
-    --card-foreground: 0 0% 95%;
-
-    --popover: 0 0% 14%;
-    --popover-foreground: 0 0% 95%;
-
-    /* M3 Primary Dark */
-    --primary: 0 65% 55%;
-    --primary-foreground: 0 0% 100%;
-
-    /* M3 Secondary Dark */
-    --secondary: 0 0% 20%;
-    --secondary-foreground: 0 0% 90%;
-
-    /* M3 Surface Variant Dark */
-    --muted: 0 0% 18%;
-    --muted-foreground: 0 0% 60%;
-
-    /* M3 Tertiary Dark */
-    --accent: 0 55% 60%;
-    --accent-foreground: 0 0% 100%;
-
-    /* M3 Error Dark */
-    --destructive: 0 70% 55%;
+    
+    /* Destructive: Red */
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-
-    /* Success Dark */
-    --success: 145 55% 50%;
-    --success-foreground: 0 0% 100%;
-
-    /* Warning Dark */
-    --warning: 40 85% 55%;
-    --warning-foreground: 0 0% 10%;
-
-    /* M3 Outline Dark */
-    --border: 0 0% 22%;
-    --input: 0 0% 22%;
-    --ring: 0 65% 55%;
-
-    /* Sidebar Dark */
-    --sidebar-background: 0 50% 18%;
-    --sidebar-foreground: 0 0% 95%;
-    --sidebar-primary: 0 65% 55%;
+    
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 0 68% 33%;
+    
+    /* Premium radius - 16px */
+    --radius: 1rem;
+    
+    /* Chart palette - Professional */
+    --chart-1: 0 68% 33%;
+    --chart-2: 220 70% 50%;
+    --chart-3: 152 60% 40%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 262 83% 58%;
+    
+    /* Sidebar: Very Dark Red / Almost Black */
+    --sidebar-background: 0 50% 10%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 0 65% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 40% 28%;
+    --sidebar-accent: 0 40% 16%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 30% 18%;
+    --sidebar-ring: 0 65% 45%;
+  }
+  
+  .dark {
+    --background: 220 25% 8%;
+    --foreground: 220 10% 95%;
+    
+    --card: 220 25% 10%;
+    --card-foreground: 220 10% 95%;
+    
+    --popover: 220 25% 10%;
+    --popover-foreground: 220 10% 95%;
+    
+    --primary: 0 65% 50%;
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 220 20% 18%;
+    --secondary-foreground: 220 10% 85%;
+    
+    --muted: 220 20% 18%;
+    --muted-foreground: 220 10% 55%;
+    
+    --accent: 220 20% 18%;
+    --accent-foreground: 220 10% 85%;
+    
+    --success: 152 55% 48%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 85% 55%;
+    --warning-foreground: 0 0% 10%;
+    
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 220 20% 20%;
+    --input: 220 20% 20%;
+    --ring: 0 65% 50%;
+    
+    --chart-1: 0 65% 50%;
+    --chart-2: 220 70% 60%;
+    --chart-3: 152 60% 50%;
+    --chart-4: 38 92% 55%;
+    --chart-5: 262 83% 65%;
+    
+    --sidebar-background: 220 25% 6%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 0 65% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 20% 12%;
     --sidebar-accent-foreground: 0 0% 95%;
-    --sidebar-border: 0 30% 25%;
-    --sidebar-ring: 0 65% 55%;
+    --sidebar-border: 220 20% 15%;
+    --sidebar-ring: 0 65% 50%;
   }
 }
 
@@ -133,100 +123,152 @@
   * {
     @apply border-border;
   }
-
-  html {
-    font-family: "Geist Sans", system-ui, sans-serif;
-  }
-
+  
   body {
     @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  /* Premium Card Styles */
+  .premium-card {
+    @apply bg-card rounded-2xl border border-border;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.03), 0 1px 2px -1px rgb(0 0 0 / 0.03);
+    transition: all 0.2s ease-in-out;
+  }
+  
+  .premium-card:hover {
+    box-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.06), 0 4px 12px -2px rgb(0 0 0 / 0.03);
+    transform: translateY(-2px);
+  }
+  
+  /* Stats Card Styles */
+  .stats-card {
+    @apply bg-card rounded-2xl border border-border relative overflow-hidden;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.03);
+    transition: all 0.2s ease-in-out;
+  }
+  
+  .stats-card:hover {
+    box-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.06);
+    transform: translateY(-2px);
+  }
+  
+  .stats-card-accent {
+    @apply absolute top-0 left-0 right-0 h-1;
+  }
+  
+  /* Sidebar Navigation Item */
+  .sidebar-nav-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl relative;
+    @apply text-sidebar-foreground/70 font-medium;
+    @apply transition-all duration-200 ease-in-out;
+  }
+  
+  .sidebar-nav-item:hover {
+    @apply bg-sidebar-accent text-sidebar-foreground;
+  }
+  
+  .sidebar-nav-item.active {
+    @apply bg-sidebar-primary text-sidebar-foreground font-semibold;
+  }
+  
+  .sidebar-nav-item.active::before {
+    content: '';
+    @apply absolute left-0 top-1/2 -translate-y-1/2;
+    @apply w-[3px] h-6 rounded-r-full bg-white;
   }
 }
 
 @layer utilities {
-  .gradient-primary {
-    @apply bg-gradient-to-br from-primary to-accent;
+  /* Shadows */
+  .shadow-premium {
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.03), 0 1px 2px -1px rgb(0 0 0 / 0.03);
   }
-
+  
+  .shadow-premium-hover {
+    box-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.06), 0 4px 12px -2px rgb(0 0 0 / 0.03);
+  }
+  
+  .shadow-elevated {
+    box-shadow: 0 4px 16px -2px rgb(0 0 0 / 0.05), 0 2px 8px -2px rgb(0 0 0 / 0.02);
+  }
+  
+  /* Card hover animation */
   .card-hover {
-    @apply transition-all duration-200 hover:shadow-md hover:-translate-y-0.5;
+    @apply transition-all duration-200 ease-in-out;
   }
-
-  /* M3 Elevation styles */
-  .elevation-1 {
-    @apply shadow-sm;
+  
+  .card-hover:hover {
+    box-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.06);
+    transform: translateY(-2px);
   }
-
-  .elevation-2 {
-    @apply shadow-md;
+  
+  /* Gradient Primary */
+  .gradient-primary {
+    @apply bg-primary;
   }
-
-  .elevation-3 {
-    @apply shadow-lg;
-  }
-
+  
+  /* Status badges */
   .status-available {
-    @apply bg-success/10 text-success border border-success/20;
+    background-color: hsl(var(--success) / 0.1);
+    color: hsl(var(--success));
+    border: 1px solid hsl(var(--success) / 0.2);
   }
-
+  
   .status-in-use {
-    @apply bg-destructive/10 text-destructive border border-destructive/20;
+    background-color: hsl(var(--destructive) / 0.1);
+    color: hsl(var(--destructive));
+    border: 1px solid hsl(var(--destructive) / 0.2);
   }
-
+  
   .status-maintenance {
-    @apply bg-warning/10 text-warning border border-warning/20;
+    background-color: hsl(var(--warning) / 0.1);
+    color: hsl(var(--warning));
+    border: 1px solid hsl(var(--warning) / 0.2);
   }
-
+  
   /* Mobile-optimized table wrapper */
   .table-responsive {
     @apply w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0;
   }
-
+  
   /* Touch-friendly tap targets */
   .touch-target {
     @apply min-h-[44px] min-w-[44px];
   }
-
+  
   /* Mobile-optimized tabs */
   .tabs-mobile {
     @apply w-full overflow-x-auto scrollbar-hide;
   }
-
+  
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-
+  
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
-
-  /* Prevent text selection on touch devices for interactive elements */
+  
+  /* Prevent text selection on touch devices */
   .no-select {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
   }
-
+  
   /* Safe area for mobile notches */
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0);
   }
-
+  
   .safe-top {
     padding-top: env(safe-area-inset-top, 0);
-  }
-
-  /* M3 State layers */
-  .state-layer-hover {
-    @apply hover:bg-foreground/8;
-  }
-
-  .state-layer-active {
-    @apply active:bg-foreground/12;
-  }
-
-  .state-layer-focus {
-    @apply focus:bg-foreground/12;
   }
 }

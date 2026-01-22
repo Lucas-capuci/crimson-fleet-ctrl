@@ -13,20 +13,28 @@ interface StatsCardProps {
   onClick?: () => void;
 }
 
-const variantStyles = {
-  default: "bg-card border border-border",
-  primary: "gradient-primary text-primary-foreground",
-  success: "bg-success text-success-foreground",
-  warning: "bg-warning text-warning-foreground",
-  destructive: "bg-destructive text-destructive-foreground",
+const accentColors = {
+  default: "bg-primary",
+  primary: "bg-primary",
+  success: "bg-success",
+  warning: "bg-warning",
+  destructive: "bg-destructive",
 };
 
-const iconVariantStyles = {
-  default: "bg-primary/10 text-primary",
-  primary: "bg-primary-foreground/20 text-primary-foreground",
-  success: "bg-success-foreground/20 text-success-foreground",
-  warning: "bg-warning-foreground/20 text-warning-foreground",
-  destructive: "bg-destructive-foreground/20 text-destructive-foreground",
+const iconBgColors = {
+  default: "bg-primary/10",
+  primary: "bg-primary/10",
+  success: "bg-success/10",
+  warning: "bg-warning/10",
+  destructive: "bg-destructive/10",
+};
+
+const iconColors = {
+  default: "text-primary",
+  primary: "text-primary",
+  success: "text-success",
+  warning: "text-warning",
+  destructive: "text-destructive",
 };
 
 export function StatsCard({
@@ -37,49 +45,51 @@ export function StatsCard({
   variant = "default",
   onClick,
 }: StatsCardProps) {
-  const isColored = variant !== "default";
   const isClickable = !!onClick;
 
   return (
     <div
       onClick={onClick}
       className={cn(
-        "rounded-xl p-4 sm:p-6 card-hover animate-fade-in touch-target",
-        variantStyles[variant],
-        isClickable && "cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-transform"
+        "stats-card p-5 sm:p-6 animate-fade-in",
+        isClickable && "cursor-pointer"
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="space-y-1 sm:space-y-2 min-w-0 flex-1">
-          <p
-            className={cn(
-              "text-xs sm:text-sm font-medium truncate",
-              isColored ? "opacity-90" : "text-muted-foreground"
-            )}
-          >
+      {/* Accent bar */}
+      <div className={cn("stats-card-accent rounded-t-2xl", accentColors[variant])} />
+      
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1.5 min-w-0 flex-1">
+          <p className="text-sm font-medium text-muted-foreground truncate">
             {title}
           </p>
-          <p className="text-xl sm:text-3xl font-bold tracking-tight">{value}</p>
+          <p className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            {value}
+          </p>
           {trend && (
             <p
               className={cn(
-                "text-xs sm:text-sm flex items-center gap-1",
-                isColored ? "opacity-80" : "",
-                !isColored && (trend.isPositive ? "text-success" : "text-destructive")
+                "text-sm flex items-center gap-1.5 font-medium",
+                trend.isPositive ? "text-success" : "text-destructive"
               )}
             >
-              {trend.isPositive ? "↑" : "↓"} {Math.abs(trend.value)}%
-              <span className="opacity-70 hidden sm:inline">vs mês anterior</span>
+              <span className="text-xs">
+                {trend.isPositive ? "↑" : "↓"}
+              </span>
+              {Math.abs(trend.value)}%
+              <span className="text-muted-foreground font-normal hidden sm:inline">
+                vs mês anterior
+              </span>
             </p>
           )}
         </div>
         <div
           className={cn(
-            "p-2 sm:p-3 rounded-lg sm:rounded-xl flex-shrink-0",
-            iconVariantStyles[variant]
+            "p-3 rounded-xl flex-shrink-0",
+            iconBgColors[variant]
           )}
         >
-          <Icon className="h-4 w-4 sm:h-6 sm:w-6" />
+          <Icon className={cn("h-5 w-5 sm:h-6 sm:w-6", iconColors[variant])} />
         </div>
       </div>
     </div>
