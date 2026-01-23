@@ -205,6 +205,12 @@ const FleetManagement = () => {
   const [isViewAttachmentsOpen, setIsViewAttachmentsOpen] = useState(false);
   const [viewingVehicleAttachments, setViewingVehicleAttachments] = useState<VehicleAttachment[]>([]);
   const [viewingVehiclePlate, setViewingVehiclePlate] = useState("");
+  
+  // Import vehicles state
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importCsvData, setImportCsvData] = useState("");
+  const [importPreview, setImportPreview] = useState<{ valid: Array<{plate: string; model: string; year?: number; status: VehicleStatus; gerencia?: string}>; errors: string[] }>({ valid: [], errors: [] });
+  const [isImporting, setIsImporting] = useState(false);
 
   // ==================== WORKSHOP STATE ====================
   const [workshopSearchTerm, setWorkshopSearchTerm] = useState("");
@@ -619,6 +625,37 @@ const FleetManagement = () => {
     },
   });
 
+  const importVehicles = useMutation({
+    mutationFn: async (vehiclesToImport: Array<{plate: string; model: string; year?: number; status: VehicleStatus; gerencia?: string}>) => {
+      setIsImporting(true);
+      const { error } = await supabase
+        .from("vehicles")
+        .upsert(
+          vehiclesToImport.map(v => ({
+            plate: v.plate,
+            model: v.model,
+            status: v.status,
+            gerencia: v.gerencia || null,
+          })),
+          { onConflict: "plate" }
+        );
+      if (error) throw error;
+      return vehiclesToImport.length;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      toast({ title: `${count} veículo(s) importado(s) com sucesso!` });
+      setIsImportDialogOpen(false);
+      setImportCsvData("");
+      setImportPreview({ valid: [], errors: [] });
+      setIsImporting(false);
+    },
+    onError: (error) => {
+      setIsImporting(false);
+      toast({ title: "Erro ao importar veículos", description: error.message, variant: "destructive" });
+    },
+  });
+
   // ==================== WORKSHOP MUTATIONS ====================
   const createWorkshopEntry = useMutation({
     mutationFn: async (data: typeof workshopFormData) => {
@@ -927,6 +964,79 @@ const FleetManagement = () => {
     }
   };
 
+  // ==================== IMPORT CSV HANDLERS ====================
+  const parseImportCsv = (csvText: string) => {
+    const lines = csvText.trim().split("\n").filter(l => l.trim());
+    if (lines.length < 2) {
+      setImportPreview({ valid: [], errors: ["Arquivo deve conter cabeçalho e ao menos uma linha de dados."] });
+      return;
+    }
+
+    const validStatuses: VehicleStatus[] = ["ativo", "manutencao", "reserva", "oficina", "mobilizar"];
+    const validGerencias = ["C&M", "STC Comercial", "STC Emergencial", "STC Corte e religa", "Perdas", "Âncora Comercial"];
+    
+    const valid: Array<{plate: string; model: string; year?: number; status: VehicleStatus; gerencia?: string}> = [];
+    const errors: string[] = [];
+
+    // Skip header line
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(";").map(c => c.trim());
+      const [plate, model, yearStr, statusStr, gerencia] = cols;
+      
+      if (!plate || !model) {
+        errors.push(`Linha ${i + 1}: Placa e Modelo são obrigatórios.`);
+        continue;
+      }
+
+      const status = (statusStr?.toLowerCase() || "ativo") as VehicleStatus;
+      if (!validStatuses.includes(status)) {
+        errors.push(`Linha ${i + 1}: Status "${statusStr}" inválido. Use: ativo, manutencao, reserva, oficina ou mobilizar.`);
+        continue;
+      }
+
+      if (gerencia && !validGerencias.includes(gerencia)) {
+        errors.push(`Linha ${i + 1}: Gerência "${gerencia}" inválida.`);
+        continue;
+      }
+
+      const year = yearStr ? parseInt(yearStr, 10) : undefined;
+      if (yearStr && (isNaN(year!) || year! < 1900 || year! > new Date().getFullYear() + 1)) {
+        errors.push(`Linha ${i + 1}: Ano "${yearStr}" inválido.`);
+        continue;
+      }
+
+      valid.push({ plate: plate.toUpperCase(), model, year, status, gerencia: gerencia || undefined });
+    }
+
+    setImportPreview({ valid, errors });
+  };
+
+  const handleImportCsvChange = (value: string) => {
+    setImportCsvData(value);
+    if (value.trim()) {
+      parseImportCsv(value);
+    } else {
+      setImportPreview({ valid: [], errors: [] });
+    }
+  };
+
+  const handleImportSubmit = () => {
+    if (importPreview.valid.length === 0) {
+      toast({ title: "Nenhum veículo válido para importar", variant: "destructive" });
+      return;
+    }
+    importVehicles.mutate(importPreview.valid);
+  };
+
+  const downloadCsvTemplate = () => {
+    const template = "Placa;Modelo;Ano;Status;Gerência\nABC-1234;FIAT STRADA;2023;ativo;C&M\nXYZ-5678;VW SAVEIRO;2022;reserva;STC Comercial";
+    const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "modelo_importacao_veiculos.csv";
+    link.click();
+  };
+
   const resetVehicleForm = () => {
     setVehicleFormData({ 
       plate: "", 
@@ -1215,13 +1325,121 @@ const FleetManagement = () => {
               columns={vehicleCsvColumns}
             />
             {isAdmin && (
-              <Dialog open={isVehicleDialogOpen} onOpenChange={(open) => { if (!open) resetVehicleForm(); else setIsVehicleDialogOpen(true); }}>
-                <DialogTrigger asChild>
-                  <Button className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Novo Veículo
-                  </Button>
-                </DialogTrigger>
+              <>
+                {/* Import Dialog */}
+                <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="gap-2">
+                      <Upload className="h-4 w-4" />
+                      Importar Veículos
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Importar Veículos via CSV</DialogTitle>
+                      <DialogDescription>
+                        Cole os dados do CSV abaixo ou faça upload de um arquivo. O separador deve ser ponto e vírgula (;).
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <Label>Formato esperado:</Label>
+                        <Button type="button" variant="outline" size="sm" onClick={downloadCsvTemplate} className="gap-1">
+                          <Download className="h-4 w-4" />
+                          Baixar Modelo
+                        </Button>
+                      </div>
+                      <div className="bg-muted p-3 rounded-lg text-sm font-mono">
+                        Placa;Modelo;Ano;Status;Gerência
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="importCsv">Dados CSV</Label>
+                        <Textarea
+                          id="importCsv"
+                          value={importCsvData}
+                          onChange={(e) => handleImportCsvChange(e.target.value)}
+                          placeholder="Cole os dados do CSV aqui..."
+                          className="min-h-[150px] font-mono text-sm"
+                        />
+                      </div>
+                      
+                      {/* Preview Section */}
+                      {(importPreview.valid.length > 0 || importPreview.errors.length > 0) && (
+                        <div className="space-y-3">
+                          {importPreview.valid.length > 0 && (
+                            <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                              <p className="text-sm font-medium text-green-700 mb-2">
+                                ✓ {importPreview.valid.length} veículo(s) válido(s) para importação
+                              </p>
+                              <div className="max-h-[120px] overflow-y-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead className="py-1 text-xs">Placa</TableHead>
+                                      <TableHead className="py-1 text-xs">Modelo</TableHead>
+                                      <TableHead className="py-1 text-xs">Status</TableHead>
+                                      <TableHead className="py-1 text-xs">Gerência</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {importPreview.valid.slice(0, 5).map((v, i) => (
+                                      <TableRow key={i}>
+                                        <TableCell className="py-1 text-xs">{v.plate}</TableCell>
+                                        <TableCell className="py-1 text-xs">{v.model}</TableCell>
+                                        <TableCell className="py-1 text-xs">{vehicleStatusConfig[v.status]?.label}</TableCell>
+                                        <TableCell className="py-1 text-xs">{v.gerencia || "-"}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                                {importPreview.valid.length > 5 && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    ... e mais {importPreview.valid.length - 5} veículo(s)
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {importPreview.errors.length > 0 && (
+                            <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
+                              <p className="text-sm font-medium text-destructive mb-2">
+                                ✗ {importPreview.errors.length} erro(s) encontrado(s)
+                              </p>
+                              <ul className="text-xs text-destructive space-y-1 max-h-[80px] overflow-y-auto">
+                                {importPreview.errors.map((err, i) => (
+                                  <li key={i}>{err}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex justify-end gap-2 pt-2">
+                        <Button type="button" variant="outline" onClick={() => { setIsImportDialogOpen(false); setImportCsvData(""); setImportPreview({ valid: [], errors: [] }); }}>
+                          Cancelar
+                        </Button>
+                        <Button 
+                          onClick={handleImportSubmit} 
+                          disabled={importPreview.valid.length === 0 || isImporting}
+                          className="gap-2"
+                        >
+                          {isImporting ? "Importando..." : `Importar ${importPreview.valid.length} Veículo(s)`}
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Create Vehicle Dialog */}
+                <Dialog open={isVehicleDialogOpen} onOpenChange={(open) => { if (!open) resetVehicleForm(); else setIsVehicleDialogOpen(true); }}>
+                  <DialogTrigger asChild>
+                    <Button className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      Novo Veículo
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>{editingVehicle ? "Editar Veículo" : "Novo Veículo"}</DialogTitle>
@@ -1462,6 +1680,7 @@ const FleetManagement = () => {
                   </form>
                 </DialogContent>
               </Dialog>
+              </>
             )}
           </div>
 
