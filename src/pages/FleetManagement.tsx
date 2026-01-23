@@ -1030,7 +1030,9 @@ const FleetManagement = () => {
 
   const downloadCsvTemplate = () => {
     const template = "Placa;Modelo;Ano;Status;Gerência\nABC-1234;FIAT STRADA;2023;ativo;C&M\nXYZ-5678;VW SAVEIRO;2022;reserva;STC Comercial";
-    const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
+    // Add BOM for UTF-8 encoding (Excel compatibility)
+    const BOM = "\uFEFF";
+    const blob = new Blob([BOM + template], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = "modelo_importacao_veiculos.csv";
