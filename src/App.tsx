@@ -12,6 +12,7 @@ import Teams from "./pages/Teams";
 import Departures from "./pages/Departures";
 import Schedule from "./pages/Schedule";
 import Admin from "./pages/Admin";
+import Production from "./pages/Production";
 import Budget from "./pages/Budget";
 import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/equipes" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
             <Route path="/escala" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
             <Route path="/saida" element={<ProtectedRoute><Departures /></ProtectedRoute>} />
+            <Route path="/producao" element={<ProtectedRoute><Production /></ProtectedRoute>} />
             <Route path="/orcamento" element={<ProtectedRoute><Budget /></ProtectedRoute>} />
             <Route path="/relatorios" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />

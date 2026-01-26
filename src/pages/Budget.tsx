@@ -25,7 +25,6 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AnalyticsTab } from "@/components/budget/AnalyticsTab";
 import { ValuesComparisonChart } from "@/components/budget/ValuesComparisonChart";
-import { ProductivityTab } from "@/components/budget/ProductivityTab";
 
 interface Team {
   id: string;
@@ -1037,7 +1036,6 @@ export default function Budget() {
               <BarChart3 className="h-4 w-4 mr-2" />
               Analítico
             </TabsTrigger>
-            <TabsTrigger value="produtividade">Produtividade de Poda</TabsTrigger>
             <TabsTrigger value="catalog">Catálogo de Serviços</TabsTrigger>
           </TabsList>
 
@@ -1748,10 +1746,6 @@ export default function Budget() {
               clearFilters={clearFilters}
               oses={oses}
             />
-          </TabsContent>
-
-          <TabsContent value="produtividade" className="space-y-4">
-            <ProductivityTab />
           </TabsContent>
 
           <TabsContent value="catalog" className="space-y-4">
